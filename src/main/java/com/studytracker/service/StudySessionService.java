@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,7 +44,7 @@ public class StudySessionService {
         StudySession session = StudySession.builder()
                 .user(user)
                 .subject(subject != null ? subject.trim() : null)
-                .startedAt(LocalDateTime.now())
+                .startedAt(Instant.now())
                 .source(SessionSource.TIMER)
                 .build();
 
@@ -68,7 +68,7 @@ public class StudySessionService {
             throw new IllegalArgumentException("Session is already stopped");
         }
 
-        LocalDateTime endedAt = LocalDateTime.now();
+        Instant endedAt = Instant.now();
         int durationSeconds = (int) Duration.between(session.getStartedAt(), endedAt).toSeconds();
         
         // Chống treo máy qua đêm (giới hạn tối đa 12h)
@@ -111,14 +111,14 @@ public class StudySessionService {
      */
     @Transactional
     public StudySessionResponse createManualSession(User user, SessionManualRequest request) {
-        LocalDateTime startedAt = request.getStartedAt();
+        Instant startedAt = request.getStartedAt();
         int durationSeconds = request.getDurationSeconds();
         
         if (durationSeconds > MAX_DURATION_SECONDS) {
             durationSeconds = MAX_DURATION_SECONDS;
         }
 
-        LocalDateTime endedAt = startedAt.plusSeconds(durationSeconds);
+        Instant endedAt = startedAt.plusSeconds(durationSeconds);
         int xpEarned = xpService.calculateXpEarned(durationSeconds);
 
         // Cộng XP và cập nhật level cho user

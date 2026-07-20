@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 public class SessionManualRequest {
@@ -15,5 +15,5 @@ public class SessionManualRequest {
     private Integer durationSeconds;
 
     @NotNull
-    private LocalDateTime startedAt;
+    private Instant startedAt;
 }
