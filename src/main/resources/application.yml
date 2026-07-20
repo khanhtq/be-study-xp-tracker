@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: study-xp-tracker
+  datasource:
+    url: jdbc:postgresql://localhost:5432/study_xp_tracker
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  jwt:
+    secret: 9a62aa5c1d2e8b0a701dfc0b2bb2b45a27e7f6e07a3c306dcd37c1527ef94c6f9a62aa5c1d2e8b0a701dfc0b2bb2b45a27e7f6e07a3c306dcd37c1527ef94c6f9
+    expiration-ms: 86400000 # 24 hours
+  xp:
+    base-rate-per-minute: 10
+    pomodoro-bonus-percentage: 10 # +10% for sessions >= 25 mins

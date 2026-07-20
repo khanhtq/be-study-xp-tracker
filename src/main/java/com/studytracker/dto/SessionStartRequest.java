@@ -1,0 +1,8 @@
+package com.studytracker.dto;
+
+import lombok.Data;
+
+@Data
+public class SessionStartRequest {
+    private String subject;
+}
