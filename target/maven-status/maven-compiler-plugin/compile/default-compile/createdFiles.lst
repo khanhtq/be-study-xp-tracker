@@ -20,6 +20,7 @@ com\studytracker\model\XpLevelConfig.class
 com\studytracker\dto\AuthResponse$AuthResponseBuilder.class
 com\studytracker\StudyXpTrackerApplication.class
 com\studytracker\config\SecurityConfig.class
+com\studytracker\dto\OnlineUserResponse.class
 com\studytracker\model\User.class
 com\studytracker\dto\UserProgressResponse.class
 com\studytracker\controller\HealthController.class
@@ -27,6 +28,7 @@ com\studytracker\model\StudySession$StudySessionBuilder.class
 com\studytracker\controller\StudySessionController.class
 com\studytracker\dto\SessionStopResponse$SessionStopResponseBuilder.class
 com\studytracker\service\XpService$XpCalculationResult.class
+com\studytracker\dto\OnlineUserResponse$OnlineUserResponseBuilder.class
 com\studytracker\dto\SessionStartRequest.class
 com\studytracker\dto\RegisterRequest.class
 com\studytracker\service\XpService.class

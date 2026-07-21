@@ -8,6 +8,7 @@ E:\Project\study-tracking\backend\src\main\java\com\studytracker\controller\Stud
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\controller\UserController.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\dto\AuthResponse.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\dto\LoginRequest.java
+E:\Project\study-tracking\backend\src\main\java\com\studytracker\dto\OnlineUserResponse.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\dto\RegisterRequest.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\dto\SessionManualRequest.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\dto\SessionStartRequest.java
