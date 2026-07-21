@@ -117,6 +117,7 @@ public class UserService {
                     .isStudying(isStudying)
                     .currentSubject(currentSubject)
                     .studyStartedAt(studyStartedAt)
+                    .currentLevel(u.getCurrentLevel())
                     .build();
         }).collect(Collectors.toList());
     }
