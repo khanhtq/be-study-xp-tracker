@@ -3,6 +3,7 @@ E:\Project\study-tracking\backend\src\main\java\com\studytracker\config\JwtAuthe
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\config\JwtTokenProvider.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\config\SecurityConfig.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\controller\AuthController.java
+E:\Project\study-tracking\backend\src\main\java\com\studytracker\controller\HealthController.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\controller\StudySessionController.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\controller\UserController.java
 E:\Project\study-tracking\backend\src\main\java\com\studytracker\dto\AuthResponse.java
