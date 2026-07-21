@@ -48,6 +48,8 @@ public class User implements UserDetails {
     @Column(updatable = false)
     private Instant createdAt;
 
+    private Instant lastActiveAt;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));

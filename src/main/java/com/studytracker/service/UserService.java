@@ -4,9 +4,17 @@ import com.studytracker.config.JwtTokenProvider;
 import com.studytracker.dto.AuthResponse;
 import com.studytracker.dto.LoginRequest;
 import com.studytracker.dto.RegisterRequest;
+import com.studytracker.dto.OnlineUserResponse;
 import com.studytracker.dto.UserProgressResponse;
+import com.studytracker.model.StudySession;
 import com.studytracker.model.User;
+import com.studytracker.repository.StudySessionRepository;
 import com.studytracker.repository.UserRepository;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final StudySessionRepository studySessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
@@ -83,5 +92,32 @@ public class UserService {
                 .xpRequiredForNextLevel(xpRequired)
                 .totalXp(user.getTotalXp())
                 .build();
+    }
+
+    @Transactional
+    public List<OnlineUserResponse> getOnlineUsers(User currentUser) {
+        // Update current user's activity heartbeat
+        currentUser.setLastActiveAt(Instant.now());
+        userRepository.save(currentUser);
+
+        // Fetch users active in the last 2 minutes
+        Instant threshold = Instant.now().minus(Duration.ofMinutes(2));
+        List<User> activeUsers = userRepository.findByLastActiveAtAfter(threshold);
+
+        return activeUsers.stream().map(u -> {
+            Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(u);
+            boolean isStudying = activeSessionOpt.isPresent();
+            String currentSubject = isStudying ? activeSessionOpt.get().getSubject() : null;
+            Instant studyStartedAt = isStudying ? activeSessionOpt.get().getStartedAt() : null;
+
+            return OnlineUserResponse.builder()
+                    .userId(u.getId())
+                    .displayName(u.getDisplayName())
+                    .lastActiveAt(u.getLastActiveAt())
+                    .isStudying(isStudying)
+                    .currentSubject(currentSubject)
+                    .studyStartedAt(studyStartedAt)
+                    .build();
+        }).collect(Collectors.toList());
     }
 }

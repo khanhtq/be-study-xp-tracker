@@ -21,4 +21,9 @@ public class UserController {
     public ResponseEntity<UserProgressResponse> getMyProgress(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(userService.getUserProgress(user));
     }
+
+    @GetMapping("/online")
+    public ResponseEntity<java.util.List<com.studytracker.dto.OnlineUserResponse>> getOnlineUsers(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(userService.getOnlineUsers(user));
+    }
 }
