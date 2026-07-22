@@ -57,6 +57,7 @@ public class UserService {
                 .userId(savedUser.getId())
                 .email(savedUser.getEmail())
                 .displayName(savedUser.getDisplayName())
+                .role(savedUser.getRole() != null ? savedUser.getRole().name() : "ROLE_USER")
                 .build();
     }
 
@@ -78,6 +79,7 @@ public class UserService {
                 .userId(user.getId())
                 .email(user.getEmail())
                 .displayName(user.getDisplayName())
+                .role(user.getRole() != null ? user.getRole().name() : "ROLE_USER")
                 .build();
     }
 
@@ -87,6 +89,7 @@ public class UserService {
                 .userId(user.getId())
                 .email(user.getEmail())
                 .displayName(user.getDisplayName())
+                .role(user.getRole() != null ? user.getRole().name() : "ROLE_USER")
                 .currentLevel(user.getCurrentLevel())
                 .currentXp(user.getCurrentXp())
                 .xpRequiredForNextLevel(xpRequired)
@@ -100,9 +103,11 @@ public class UserService {
         currentUser.setLastActiveAt(Instant.now());
         userRepository.save(currentUser);
 
-        // Fetch users active in the last 2 minutes
+        // Fetch users active in the last 2 minutes (excluding Admins)
         Instant threshold = Instant.now().minus(Duration.ofMinutes(2));
-        List<User> activeUsers = userRepository.findByLastActiveAtAfter(threshold);
+        List<User> activeUsers = userRepository.findByLastActiveAtAfter(threshold).stream()
+                .filter(u -> u.getRole() != com.studytracker.model.Role.ROLE_ADMIN)
+                .collect(Collectors.toList());
 
         return activeUsers.stream().map(u -> {
             Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(u);

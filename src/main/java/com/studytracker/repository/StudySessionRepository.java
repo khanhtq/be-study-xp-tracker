@@ -15,6 +15,9 @@ public interface StudySessionRepository extends JpaRepository<StudySession, UUID
     Optional<StudySession> findByUserAndEndedAtIsNull(User user);
     List<StudySession> findByUserOrderByStartedAtDesc(User user);
     List<StudySession> findByUserAndEndedAtIsNotNullOrderByStartedAtDesc(User user);
+    List<StudySession> findByUserAndStartedAtAfter(User user, Instant from);
+    List<StudySession> findByStartedAtAfter(Instant from);
     List<StudySession> findByEndedAtIsNullAndLastHeartbeatAtBefore(Instant cutoff);
     List<StudySession> findByEndedAtIsNullAndLastHeartbeatAtIsNullAndStartedAtBefore(Instant cutoff);
+    long countByEndedAtIsNotNull();
 }

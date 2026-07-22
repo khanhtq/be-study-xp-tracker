@@ -5,19 +5,26 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserProgressResponse {
+public class UserSessionStatsDto {
     private UUID userId;
-    private String email;
     private String displayName;
+    private String email;
     private String role;
     private Integer currentLevel;
-    private Integer currentXp;
-    private Integer xpRequiredForNextLevel;
     private Long totalXp;
+    private boolean isOnline;
+    private boolean isStudying;
+    private Instant lastActiveAt;
+    private long totalSessionsCount;
+    private long totalStudySeconds;
+    private long periodStudySeconds;
+    private long periodSessionsCount;
+    private long periodXpEarned;
 }

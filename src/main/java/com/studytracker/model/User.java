@@ -50,9 +50,14 @@ public class User implements UserDetails {
 
     private Instant lastActiveAt;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", columnDefinition = "VARCHAR(255) DEFAULT 'ROLE_USER'")
+    private Role role = Role.ROLE_USER;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+        return Collections.singletonList(new SimpleGrantedAuthority(role != null ? role.name() : Role.ROLE_USER.name()));
     }
 
     @Override
