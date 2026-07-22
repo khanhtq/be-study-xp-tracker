@@ -21,5 +21,6 @@ public class StudySessionResponse {
     private Integer durationSeconds;
     private Integer xpEarned;
     private SessionSource source;
+    private Instant lastHeartbeatAt;
     private Instant createdAt;
 }

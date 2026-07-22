@@ -41,15 +41,37 @@ public class StudySessionService {
             return mapToResponse(activeSessionOpt.get());
         }
 
+        Instant now = Instant.now();
         StudySession session = StudySession.builder()
                 .user(user)
                 .subject(subject != null ? subject.trim() : null)
-                .startedAt(Instant.now())
+                .startedAt(now)
+                .lastHeartbeatAt(now)
                 .source(SessionSource.TIMER)
                 .build();
 
         StudySession saved = studySessionRepository.save(session);
         return mapToResponse(saved);
+    }
+
+    /**
+     * Gửi heartbeat để cập nhật thời gian hoạt động gần nhất của session.
+     */
+    @Transactional
+    public void heartbeat(User user, UUID sessionId) {
+        StudySession session = studySessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found with id: " + sessionId));
+
+        if (!session.getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("Session does not belong to this user");
+        }
+
+        if (session.getEndedAt() != null) {
+            return; // Session đã kết thúc, bỏ qua heartbeat
+        }
+
+        session.setLastHeartbeatAt(Instant.now());
+        studySessionRepository.save(session);
     }
 
     /**
@@ -166,6 +188,7 @@ public class StudySessionService {
                 .durationSeconds(session.getDurationSeconds())
                 .xpEarned(session.getXpEarned())
                 .source(session.getSource())
+                .lastHeartbeatAt(session.getLastHeartbeatAt())
                 .createdAt(session.getCreatedAt())
                 .build();
     }

@@ -34,6 +34,8 @@ public class StudySession {
 
     private Integer xpEarned;
 
+    private Instant lastHeartbeatAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SessionSource source;

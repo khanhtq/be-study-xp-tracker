@@ -39,6 +39,15 @@ public class StudySessionController {
         return ResponseEntity.ok(studySessionService.stopSession(user, id));
     }
 
+    @PostMapping("/{id}/heartbeat")
+    public ResponseEntity<Void> sendHeartbeat(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID id
+    ) {
+        studySessionService.heartbeat(user, id);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/manual")
     public ResponseEntity<StudySessionResponse> createManualSession(
             @AuthenticationPrincipal User user,
