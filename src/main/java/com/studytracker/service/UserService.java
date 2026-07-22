@@ -110,6 +110,28 @@ public class UserService {
             String currentSubject = isStudying ? activeSessionOpt.get().getSubject() : null;
             Instant studyStartedAt = isStudying ? activeSessionOpt.get().getStartedAt() : null;
 
+            int realtimeLevel = u.getCurrentLevel() != null ? u.getCurrentLevel() : 1;
+            int baseLevel = realtimeLevel;
+            int currentXp = u.getCurrentXp() != null ? u.getCurrentXp() : 0;
+
+            if (isStudying && studyStartedAt != null) {
+                long elapsedSeconds = Math.max(0, Duration.between(studyStartedAt, Instant.now()).getSeconds());
+                int xpEarned = xpService.calculateXpEarned((int) elapsedSeconds);
+                int tempXp = currentXp + xpEarned;
+                int tempLevel = baseLevel;
+
+                while (true) {
+                    int xpRequired = xpService.getXpRequiredForNextLevel(tempLevel);
+                    if (tempXp >= xpRequired) {
+                        tempXp -= xpRequired;
+                        tempLevel++;
+                    } else {
+                        break;
+                    }
+                }
+                realtimeLevel = tempLevel;
+            }
+
             return OnlineUserResponse.builder()
                     .userId(u.getId())
                     .displayName(u.getDisplayName())
@@ -117,7 +139,8 @@ public class UserService {
                     .isStudying(isStudying)
                     .currentSubject(currentSubject)
                     .studyStartedAt(studyStartedAt)
-                    .currentLevel(u.getCurrentLevel())
+                    .currentLevel(realtimeLevel)
+                    .currentXp(currentXp)
                     .build();
         }).collect(Collectors.toList());
     }

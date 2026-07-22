@@ -20,4 +20,5 @@ public class OnlineUserResponse {
     private String currentSubject;
     private Instant studyStartedAt;
     private Integer currentLevel;
+    private Integer currentXp;
 }
