@@ -469,11 +469,12 @@ public class UserService {
 
         List<TitleOptionDto> titles = new ArrayList<>();
         titles.add(new TitleOptionDto("Tân Binh Tập Trung", "Dành cho mọi thành viên mới bắt đầu hành trình học tập", 1, userLevel >= 1));
-        titles.add(new TitleOptionDto("Học Giả Bền Bỉ", "Đạt Level 3 - Chứng tỏ tinh thần học tập kiên trì", 3, userLevel >= 3));
-        titles.add(new TitleOptionDto("Chiến Binh Pomodoro", "Đạt Level 5 - Làm chủ kỹ năng quản lý thời gian", 5, userLevel >= 5));
-        titles.add(new TitleOptionDto("Bậc Thầy Tập Trung", "Đạt Level 10 - Khả năng siêu tập trung không xao nhãng", 10, userLevel >= 10));
-        titles.add(new TitleOptionDto("Đại Sứ Học Thuật", "Đạt Level 15 - Đỉnh cao tri thức và chuyên năng", 15, userLevel >= 15));
-        titles.add(new TitleOptionDto("Huyền Thoại XP", "Đạt Level 25 - Huyền thoại trong giới cày XP học tập", 25, userLevel >= 25));
+        titles.add(new TitleOptionDto("Học Giả Bền Bỉ", "Đạt Level 5 - Chứng tỏ tinh thần học tập kiên trì", 5, userLevel >= 5));
+        titles.add(new TitleOptionDto("Chiến Binh Pomodoro", "Đạt Level 12 - Làm chủ kỹ năng quản lý thời gian", 12, userLevel >= 12));
+        titles.add(new TitleOptionDto("Bậc Thầy Tập Trung", "Đạt Level 25 - Khả năng siêu tập trung không xao nhãng", 25, userLevel >= 25));
+        titles.add(new TitleOptionDto("Đại Sứ Học Thuật", "Đạt Level 40 - Đỉnh cao tri thức và chuyên năng", 40, userLevel >= 40));
+        titles.add(new TitleOptionDto("Huyền Thoại XP", "Đạt Level 60 - Huyền thoại trong giới cày XP học tập", 60, userLevel >= 60));
+        titles.add(new TitleOptionDto("Thượng Cổ Thần Học", "Đạt Level 100 - Đỉnh phong chí tôn học giả", 100, userLevel >= 100));
 
         return titles;
     }
