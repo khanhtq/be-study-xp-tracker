@@ -16,8 +16,8 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${spring.mail.password:}")
-    private String mailPassword;
+    @Value("${brevo.api.key:${BREVO_API_KEY:${spring.mail.password:}}}")
+    private String brevoApiKey;
 
     @Value("${spring.mail.from:${spring.mail.username:no-reply@studyxptracker.com}}")
     private String fromEmail;
@@ -77,8 +77,8 @@ public class EmailService {
     }
 
     private boolean sendViaBrevoHttpApi(String toEmail, String subject, String htmlContent) {
-        if (mailPassword == null || mailPassword.isBlank()) {
-            log.warn("Cannot use Brevo HTTPS API fallback because mailPassword / API key is not configured.");
+        if (brevoApiKey == null || brevoApiKey.isBlank()) {
+            log.warn("Cannot use Brevo HTTPS API fallback because BREVO_API_KEY / mailPassword is not configured.");
             return false;
         }
 
@@ -104,7 +104,7 @@ public class EmailService {
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create("https://api.brevo.com/v3/smtp/email"))
                     .header("accept", "application/json")
-                    .header("api-key", mailPassword)
+                    .header("api-key", brevoApiKey)
                     .header("content-type", "application/json")
                     .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonPayload))
                     .build();
