@@ -21,12 +21,7 @@ public class EmailService {
 
     @Async
     public void sendOtpEmail(String toEmail, String otpCode) {
-        log.info("==================================================================");
-        log.info(" OTP VERIFICATION CODE (STUDY XP TRACKER)");
-        log.info(" Sent to email: {}", toEmail);
-        log.info(" 4-digit OTP Code: >>> {} <<<", otpCode);
-        log.info(" Expiration: 5 minutes");
-        log.info("==================================================================");
+        log.info("Sending OTP verification email to: {}", toEmail);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -43,18 +38,13 @@ public class EmailService {
             mailSender.send(message);
             log.info("Successfully sent OTP email to {}", toEmail);
         } catch (Exception e) {
-            log.error("Failed to send OTP email via SMTP to {}. Exception: ", toEmail, e);
+            log.error("Failed to send OTP email via SMTP to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
         }
     }
 
     @Async
     public void sendPasswordResetEmail(String toEmail, String otpCode) {
-        log.info("==================================================================");
-        log.info(" PASSWORD RESET OTP CODE (STUDY XP TRACKER)");
-        log.info(" Sent to email: {}", toEmail);
-        log.info(" 4-digit OTP Code: >>> {} <<<", otpCode);
-        log.info(" Expiration: 5 minutes");
-        log.info("==================================================================");
+        log.info("Sending Password Reset OTP email to: {}", toEmail);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -71,7 +61,7 @@ public class EmailService {
             mailSender.send(message);
             log.info("Successfully sent Password Reset OTP email to {}", toEmail);
         } catch (Exception e) {
-            log.error("Failed to send Password Reset OTP email via SMTP to {}. Exception: ", toEmail, e);
+            log.error("Failed to send Password Reset OTP email via SMTP to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
         }
     }
 
