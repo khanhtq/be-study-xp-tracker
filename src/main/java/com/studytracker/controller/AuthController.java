@@ -19,16 +19,25 @@ import com.studytracker.dto.ForgotPasswordRequest;
 import com.studytracker.dto.ResetPasswordRequest;
 import com.studytracker.dto.VerifyResetOtpRequest;
 
+import com.studytracker.dto.GoogleAuthRequest;
+import com.studytracker.service.GoogleAuthService;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final UserService userService;
+    private final GoogleAuthService googleAuthService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(userService.register(request));
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody GoogleAuthRequest request) {
+        return ResponseEntity.ok(googleAuthService.processGoogleLogin(request));
     }
 
     @PostMapping("/verify-otp")

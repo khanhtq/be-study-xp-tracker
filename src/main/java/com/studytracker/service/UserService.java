@@ -289,6 +289,7 @@ public class UserService {
 
         if (userOpt.isPresent()) {
             User user = userOpt.get();
+
             // Nếu tài khoản CHƯA kích hoạt
             if (Boolean.FALSE.equals(user.getEnabled())) {
                 // Kiểm tra quá 5 phút chưa
@@ -310,6 +311,14 @@ public class UserService {
                         .displayName(user.getDisplayName())
                         .message("Tài khoản chưa được kích hoạt. Vui lòng nhập mã OTP gửi tới email của bạn.")
                         .build();
+            }
+
+            // Kiểm tra mật khẩu đối với tài khoản thường / tài khoản Google chưa tạo password
+            if (user.getPasswordHash() == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                if (user.getAuthProvider() == com.studytracker.model.AuthProvider.GOOGLE) {
+                    throw new IllegalArgumentException("Tài khoản này được khởi tạo qua Google. Vui lòng bấm 'Đăng nhập bằng Google' hoặc dùng tính năng 'Quên mật khẩu' để tạo mật khẩu.");
+                }
+                throw new IllegalArgumentException("Email hoặc mật khẩu không chính xác.");
             }
         }
 

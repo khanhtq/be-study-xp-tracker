@@ -33,6 +33,8 @@ spring:
             trust: ${SPRING_MAIL_HOST:*}
 
 app:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
   jwt:
     secret: ${JWT_SECRET:9a62aa5c1d2e8b0a701dfc0b2bb2b45a27e7f6e07a3c306dcd37c1527ef94c6f9a62aa5c1d2e8b0a701dfc0b2bb2b45a27e7f6e07a3c306dcd37c1527ef94c6f9}
     expiration-ms: 86400000 # 24 hours
