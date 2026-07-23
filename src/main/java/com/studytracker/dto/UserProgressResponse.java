@@ -22,6 +22,7 @@ public class UserProgressResponse {
     private String selectedTitle;
     private String themeAccent;
     private Boolean soundEnabled;
+    private String preferredLanguage;
     private String authProvider;
     private String role;
     private Integer currentLevel;

@@ -365,6 +365,7 @@ public class UserService {
                 .selectedTitle(u.getSelectedTitle() != null ? u.getSelectedTitle() : "Tân Binh Tập Trung")
                 .themeAccent(u.getThemeAccent() != null ? u.getThemeAccent() : "indigo")
                 .soundEnabled(u.getSoundEnabled() != null ? u.getSoundEnabled() : true)
+                .preferredLanguage(u.getPreferredLanguage() != null ? u.getPreferredLanguage() : "en")
                 .authProvider(u.getAuthProvider() != null ? u.getAuthProvider().name() : "LOCAL")
                 .role(u.getRole() != null ? u.getRole().name() : "ROLE_USER")
                 .currentLevel(u.getCurrentLevel())
@@ -406,6 +407,12 @@ public class UserService {
         }
         if (request.getSoundEnabled() != null) {
             u.setSoundEnabled(request.getSoundEnabled());
+        }
+        if (request.getPreferredLanguage() != null) {
+            String lang = request.getPreferredLanguage().trim();
+            if ("vi".equalsIgnoreCase(lang) || "en".equalsIgnoreCase(lang) || "zh".equalsIgnoreCase(lang)) {
+                u.setPreferredLanguage(lang.toLowerCase());
+            }
         }
 
         User updatedUser = userRepository.save(u);

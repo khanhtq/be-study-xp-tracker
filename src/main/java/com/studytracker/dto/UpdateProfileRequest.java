@@ -18,4 +18,5 @@ public class UpdateProfileRequest {
     private String selectedTitle;
     private String themeAccent;
     private Boolean soundEnabled;
+    private String preferredLanguage;
 }

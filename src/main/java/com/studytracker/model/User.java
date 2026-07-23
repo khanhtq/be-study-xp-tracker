@@ -51,6 +51,9 @@ public class User implements UserDetails {
     private Boolean soundEnabled = true;
 
     @Builder.Default
+    private String preferredLanguage = "en";
+
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "auth_provider")
     private AuthProvider authProvider = AuthProvider.LOCAL;
