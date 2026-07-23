@@ -59,6 +59,7 @@ public class UserService {
                 throw new IllegalArgumentException("Email đã được đăng ký: " + email);
             }
             // Nếu tài khoản chưa kích hoạt (enabled = false) -> Xóa bản ghi cũ để đăng ký lại mới
+            studySessionRepository.deleteByUser(existing);
             userRepository.delete(existing);
             userRepository.flush();
         }
@@ -112,6 +113,7 @@ public class UserService {
 
         // Kiểm tra thời hạn OTP (5 phút)
         if (user.getOtpExpiresAt() == null || Instant.now().isAfter(user.getOtpExpiresAt())) {
+            studySessionRepository.deleteByUser(user);
             userRepository.delete(user);
             throw new IllegalArgumentException("Mã OTP đã hết hạn (quá 5 phút). Thông tin đăng ký đã bị xóa, vui lòng đăng ký mới.");
         }
@@ -147,6 +149,7 @@ public class UserService {
 
         // Kiểm tra quá 5 phút chưa
         if (user.getCreatedAt() != null && user.getCreatedAt().isBefore(Instant.now().minus(5, ChronoUnit.MINUTES))) {
+            studySessionRepository.deleteByUser(user);
             userRepository.delete(user);
             throw new IllegalArgumentException("Thời hạn xác minh (5 phút) đã hết. Tài khoản đã bị xóa, vui lòng thực hiện đăng ký lại.");
         }
@@ -189,6 +192,7 @@ public class UserService {
             if (Boolean.FALSE.equals(user.getEnabled())) {
                 // Kiểm tra quá 5 phút chưa
                 if (user.getCreatedAt() != null && user.getCreatedAt().isBefore(Instant.now().minus(5, ChronoUnit.MINUTES))) {
+                    studySessionRepository.deleteByUser(user);
                     userRepository.delete(user);
                     throw new IllegalArgumentException("Tài khoản chưa xác minh đã quá hạn 5 phút và đã bị xóa. Vui lòng đăng ký lại.");
                 }

@@ -1,5 +1,6 @@
 package com.studytracker.scheduler;
 
+import com.studytracker.repository.StudySessionRepository;
 import com.studytracker.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ import java.time.temporal.ChronoUnit;
 public class UnverifiedUserCleanupScheduler {
 
     private final UserRepository userRepository;
+    private final StudySessionRepository studySessionRepository;
 
     /**
      * Tự động quét và xóa các tài khoản chưa kích hoạt (enabled = false)
@@ -27,10 +29,10 @@ public class UnverifiedUserCleanupScheduler {
     public void cleanupUnverifiedUsers() {
         Instant threshold = Instant.now().minus(5, ChronoUnit.MINUTES);
         try {
+            studySessionRepository.deleteByUnverifiedUsers(threshold);
             userRepository.deleteByEnabledFalseAndCreatedAtBefore(threshold);
         } catch (Exception e) {
             log.error("Error occurred while cleaning up unverified user accounts: {}", e.getMessage());
-
         }
     }
 }

@@ -26,6 +26,7 @@ public class DataInitializer implements CommandLineRunner {
                     .passwordHash(passwordEncoder.encode("Admin123!"))
                     .displayName("System Admin")
                     .role(Role.ROLE_ADMIN)
+                    .enabled(true)
                     .currentLevel(10)
                     .currentXp(500)
                     .totalXp(15000L)

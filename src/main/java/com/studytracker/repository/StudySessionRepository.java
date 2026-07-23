@@ -3,6 +3,9 @@ package com.studytracker.repository;
 import com.studytracker.model.StudySession;
 import com.studytracker.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -20,4 +23,11 @@ public interface StudySessionRepository extends JpaRepository<StudySession, UUID
     List<StudySession> findByEndedAtIsNullAndLastHeartbeatAtBefore(Instant cutoff);
     List<StudySession> findByEndedAtIsNullAndLastHeartbeatAtIsNullAndStartedAtBefore(Instant cutoff);
     long countByEndedAtIsNotNull();
+
+    @Modifying
+    void deleteByUser(User user);
+
+    @Modifying
+    @Query("DELETE FROM StudySession s WHERE s.user.enabled = false AND s.user.createdAt < :threshold")
+    void deleteByUnverifiedUsers(@Param("threshold") Instant threshold);
 }
