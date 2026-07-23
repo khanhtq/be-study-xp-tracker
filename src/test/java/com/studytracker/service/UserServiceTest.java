@@ -4,6 +4,7 @@ import com.studytracker.dto.AuthResponse;
 import com.studytracker.dto.RegisterRequest;
 import com.studytracker.dto.VerifyOtpRequest;
 import com.studytracker.model.User;
+import com.studytracker.repository.StudySessionRepository;
 import com.studytracker.repository.UserRepository;
 import com.studytracker.config.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +26,9 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private StudySessionRepository studySessionRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
