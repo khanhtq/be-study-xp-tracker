@@ -28,25 +28,31 @@ public class EmailService {
         String subject = "Mã xác minh tài khoản Study XP Tracker";
         String htmlBody = buildOtpEmailHtml(otpCode);
 
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            String sender = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : "no-reply@studyxptracker.com";
-            helper.setFrom(sender, "Study XP Tracker");
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlBody, true);
-
-            mailSender.send(message);
-            log.info("Successfully sent OTP email to {}", toEmail);
-        } catch (Exception e) {
-            log.warn("SMTP email send failed (likely SMTP port blocked by host). Attempting Brevo HTTPS REST API fallback...");
-            boolean apiSuccess = sendViaBrevoHttpApi(toEmail, subject, htmlBody);
-            if (!apiSuccess) {
-                log.error("Failed to send OTP email via SMTP and HTTPS API to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
-            }
+        if (sendViaBrevoHttpApi(toEmail, subject, htmlBody)) {
+            return;
         }
+
+        // Secondary fallback to SMTP if API key is not configured or fails
+        try {
+            if (mailSender != null) {
+                MimeMessage message = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+                String sender = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : "no-reply@studyxptracker.com";
+                helper.setFrom(sender, "Study XP Tracker");
+                helper.setTo(toEmail);
+                helper.setSubject(subject);
+                helper.setText(htmlBody, true);
+
+                mailSender.send(message);
+                log.info("Successfully sent OTP email via SMTP fallback to {}", toEmail);
+                return;
+            }
+        } catch (Exception e) {
+            log.warn("SMTP fallback failed: {}", e.getMessage());
+        }
+
+        log.error("Failed to send OTP email to {}. (Dev Fallback OTP: {})", toEmail, otpCode);
     }
 
     @Async
@@ -55,25 +61,31 @@ public class EmailService {
         String subject = "Mã khôi phục mật khẩu Study XP Tracker";
         String htmlBody = buildResetPasswordEmailHtml(otpCode);
 
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            String sender = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : "no-reply@studyxptracker.com";
-            helper.setFrom(sender, "Study XP Tracker");
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlBody, true);
-
-            mailSender.send(message);
-            log.info("Successfully sent Password Reset OTP email to {}", toEmail);
-        } catch (Exception e) {
-            log.warn("SMTP email send failed (likely SMTP port blocked by host). Attempting Brevo HTTPS REST API fallback...");
-            boolean apiSuccess = sendViaBrevoHttpApi(toEmail, subject, htmlBody);
-            if (!apiSuccess) {
-                log.error("Failed to send Password Reset OTP email via SMTP and HTTPS API to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
-            }
+        if (sendViaBrevoHttpApi(toEmail, subject, htmlBody)) {
+            return;
         }
+
+        // Secondary fallback to SMTP if API key is not configured or fails
+        try {
+            if (mailSender != null) {
+                MimeMessage message = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+                String sender = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : "no-reply@studyxptracker.com";
+                helper.setFrom(sender, "Study XP Tracker");
+                helper.setTo(toEmail);
+                helper.setSubject(subject);
+                helper.setText(htmlBody, true);
+
+                mailSender.send(message);
+                log.info("Successfully sent Password Reset OTP email via SMTP fallback to {}", toEmail);
+                return;
+            }
+        } catch (Exception e) {
+            log.warn("SMTP fallback failed: {}", e.getMessage());
+        }
+
+        log.error("Failed to send Password Reset OTP email to {}. (Dev Fallback OTP: {})", toEmail, otpCode);
     }
 
     private boolean sendViaBrevoHttpApi(String toEmail, String subject, String htmlContent) {
