@@ -520,6 +520,7 @@ public class UserService {
                     .isStudying(isStudying)
                     .currentSubject(currentSubject)
                     .studyStartedAt(studyStartedAt)
+                    .baseLevel(baseLevel)
                     .currentLevel(realtimeLevel)
                     .currentXp(currentXp)
                     .build();
@@ -544,12 +545,34 @@ public class UserService {
                     Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(u);
                     boolean isStudying = activeSessionOpt.isPresent();
 
+                    int baseLevel = u.getCurrentLevel() != null ? u.getCurrentLevel() : 1;
+                    int currentXp = u.getCurrentXp() != null ? u.getCurrentXp() : 0;
+                    int realtimeLevel = baseLevel;
+
+                    if (isStudying && activeSessionOpt.get().getStartedAt() != null) {
+                        long elapsedSeconds = Math.max(0, Duration.between(activeSessionOpt.get().getStartedAt(), Instant.now()).getSeconds());
+                        int xpEarned = xpService.calculateXpEarned((int) elapsedSeconds);
+                        int tempXp = currentXp + xpEarned;
+                        int tempLevel = baseLevel;
+
+                        while (true) {
+                            int xpRequired = xpService.getXpRequiredForNextLevel(tempLevel);
+                            if (tempXp >= xpRequired) {
+                                tempXp -= xpRequired;
+                                tempLevel++;
+                            } else {
+                                break;
+                            }
+                        }
+                        realtimeLevel = tempLevel;
+                    }
+
                     return UserSearchResponseDto.builder()
                             .userId(u.getId())
                             .displayName(u.getDisplayName())
                             .avatarUrl(u.getAvatarUrl())
                             .selectedTitle(u.getSelectedTitle() != null ? u.getSelectedTitle() : "Tân Binh Tập Trung")
-                            .currentLevel(u.getCurrentLevel() != null ? u.getCurrentLevel() : 1)
+                            .currentLevel(realtimeLevel)
                             .totalXp(u.getTotalXp() != null ? u.getTotalXp() : 0L)
                             .isOnline(isOnline)
                             .isStudying(isStudying)
@@ -571,14 +594,16 @@ public class UserService {
         String currentSubject = isStudying ? activeSessionOpt.get().getSubject() : null;
         Instant studyStartedAt = isStudying ? activeSessionOpt.get().getStartedAt() : null;
 
-        int realtimeLevel = u.getCurrentLevel() != null ? u.getCurrentLevel() : 1;
+        int baseLevel = u.getCurrentLevel() != null ? u.getCurrentLevel() : 1;
         int currentXp = u.getCurrentXp() != null ? u.getCurrentXp() : 0;
+        int realtimeLevel = baseLevel;
+        int realtimeXp = currentXp;
 
         if (isStudying && studyStartedAt != null) {
             long elapsedSeconds = Math.max(0, Duration.between(studyStartedAt, Instant.now()).getSeconds());
             int xpEarned = xpService.calculateXpEarned((int) elapsedSeconds);
             int tempXp = currentXp + xpEarned;
-            int tempLevel = realtimeLevel;
+            int tempLevel = baseLevel;
 
             while (true) {
                 int xpRequired = xpService.getXpRequiredForNextLevel(tempLevel);
@@ -590,6 +615,7 @@ public class UserService {
                 }
             }
             realtimeLevel = tempLevel;
+            realtimeXp = tempXp;
         }
 
         List<StudySession> completedSessions = studySessionRepository.findByUserAndEndedAtIsNotNullOrderByStartedAtDesc(u);
@@ -622,7 +648,7 @@ public class UserService {
                 .selectedTitle(u.getSelectedTitle() != null ? u.getSelectedTitle() : "Tân Binh Tập Trung")
                 .studyGoal(u.getBio())
                 .currentLevel(realtimeLevel)
-                .currentXp(currentXp)
+                .currentXp(realtimeXp)
                 .xpRequiredForNextLevel(xpRequired)
                 .totalXp(u.getTotalXp() != null ? u.getTotalXp() : 0L)
                 .streakDays(streakDays)

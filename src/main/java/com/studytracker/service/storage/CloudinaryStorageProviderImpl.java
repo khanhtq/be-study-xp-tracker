@@ -3,6 +3,7 @@ package com.studytracker.service.storage;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.Resource;
@@ -17,14 +18,14 @@ import java.util.Map;
 @Slf4j
 public class CloudinaryStorageProviderImpl implements FileStorageProvider {
 
-    private final LocalStorageProviderImpl fallbackLocalProvider;
+    private final FileStorageProvider fallbackLocalProvider;
     private final String cloudName;
     private final String apiKey;
     private final String apiSecret;
     private Cloudinary cloudinary;
 
     public CloudinaryStorageProviderImpl(
-            LocalStorageProviderImpl fallbackLocalProvider,
+            @Qualifier("localStorageProvider") FileStorageProvider fallbackLocalProvider,
             @Value("${app.storage.cloudinary.cloud-name:}") String cloudName,
             @Value("${app.storage.cloudinary.api-key:}") String apiKey,
             @Value("${app.storage.cloudinary.api-secret:}") String apiSecret) {
