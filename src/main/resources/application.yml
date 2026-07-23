@@ -26,9 +26,10 @@ spring:
         smtp:
           auth: true
           starttls:
-            enable: true
-            required: true
+            enable: ${SPRING_MAIL_STARTTLS_ENABLE:true}
+            required: ${SPRING_MAIL_STARTTLS_REQUIRED:false}
           ssl:
+            enable: ${SPRING_MAIL_SSL_ENABLE:false}
             trust: ${SPRING_MAIL_HOST:*}
 
 app:
