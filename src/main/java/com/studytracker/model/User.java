@@ -55,6 +55,19 @@ public class User implements UserDetails {
     @Column(name = "role", columnDefinition = "VARCHAR(255) DEFAULT 'ROLE_USER'")
     private Role role = Role.ROLE_USER;
 
+    @Builder.Default
+    @Column(name = "enabled", columnDefinition = "boolean default false")
+    private Boolean enabled = false;
+
+    @Column(name = "otp_code")
+    private String otpCode;
+
+    @Column(name = "otp_expires_at")
+    private Instant otpExpiresAt;
+
+    @Column(name = "last_otp_sent_at")
+    private Instant lastOtpSentAt;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return Collections.singletonList(new SimpleGrantedAuthority(role != null ? role.name() : Role.ROLE_USER.name()));
@@ -87,6 +100,6 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return Boolean.TRUE.equals(enabled);
     }
 }
