@@ -16,12 +16,17 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    @Value("${spring.mail.password:}")
+    private String mailPassword;
+
     @Value("${spring.mail.from:${spring.mail.username:no-reply@studyxptracker.com}}")
     private String fromEmail;
 
     @Async
     public void sendOtpEmail(String toEmail, String otpCode) {
         log.info("Sending OTP verification email to: {}", toEmail);
+        String subject = "Mã xác minh tài khoản Study XP Tracker";
+        String htmlBody = buildOtpEmailHtml(otpCode);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -30,21 +35,25 @@ public class EmailService {
             String sender = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : "no-reply@studyxptracker.com";
             helper.setFrom(sender, "Study XP Tracker");
             helper.setTo(toEmail);
-            helper.setSubject("Mã xác minh tài khoản Study XP Tracker");
-
-            String htmlBody = buildOtpEmailHtml(otpCode);
+            helper.setSubject(subject);
             helper.setText(htmlBody, true);
 
             mailSender.send(message);
             log.info("Successfully sent OTP email to {}", toEmail);
         } catch (Exception e) {
-            log.error("Failed to send OTP email via SMTP to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
+            log.warn("SMTP email send failed (likely SMTP port blocked by host). Attempting Brevo HTTPS REST API fallback...");
+            boolean apiSuccess = sendViaBrevoHttpApi(toEmail, subject, htmlBody);
+            if (!apiSuccess) {
+                log.error("Failed to send OTP email via SMTP and HTTPS API to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
+            }
         }
     }
 
     @Async
     public void sendPasswordResetEmail(String toEmail, String otpCode) {
         log.info("Sending Password Reset OTP email to: {}", toEmail);
+        String subject = "Mã khôi phục mật khẩu Study XP Tracker";
+        String htmlBody = buildResetPasswordEmailHtml(otpCode);
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -53,16 +62,96 @@ public class EmailService {
             String sender = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : "no-reply@studyxptracker.com";
             helper.setFrom(sender, "Study XP Tracker");
             helper.setTo(toEmail);
-            helper.setSubject("Mã khôi phục mật khẩu Study XP Tracker");
-
-            String htmlBody = buildResetPasswordEmailHtml(otpCode);
+            helper.setSubject(subject);
             helper.setText(htmlBody, true);
 
             mailSender.send(message);
             log.info("Successfully sent Password Reset OTP email to {}", toEmail);
         } catch (Exception e) {
-            log.error("Failed to send Password Reset OTP email via SMTP to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
+            log.warn("SMTP email send failed (likely SMTP port blocked by host). Attempting Brevo HTTPS REST API fallback...");
+            boolean apiSuccess = sendViaBrevoHttpApi(toEmail, subject, htmlBody);
+            if (!apiSuccess) {
+                log.error("Failed to send Password Reset OTP email via SMTP and HTTPS API to {}. (Dev Fallback OTP: {}) Exception: ", toEmail, otpCode, e);
+            }
         }
+    }
+
+    private boolean sendViaBrevoHttpApi(String toEmail, String subject, String htmlContent) {
+        if (mailPassword == null || mailPassword.isBlank()) {
+            log.warn("Cannot use Brevo HTTPS API fallback because mailPassword / API key is not configured.");
+            return false;
+        }
+
+        try {
+            log.info("Sending email via Brevo HTTPS REST API to {}", toEmail);
+            String senderEmail = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail : "no-reply@studyxptracker.com";
+
+            String jsonPayload = String.format("""
+                {
+                  "sender": {"name": "Study XP Tracker", "email": "%s"},
+                  "to": [{"email": "%s"}],
+                  "subject": %s,
+                  "htmlContent": %s
+                }
+                """,
+                escapeJson(senderEmail),
+                escapeJson(toEmail),
+                toJsonString(subject),
+                toJsonString(htmlContent)
+            );
+
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.brevo.com/v3/smtp/email"))
+                    .header("accept", "application/json")
+                    .header("api-key", mailPassword)
+                    .header("content-type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonPayload))
+                    .build();
+
+            java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("Successfully sent email via Brevo HTTPS API to {}", toEmail);
+                return true;
+            } else {
+                log.error("Brevo HTTPS API returned error status {}: {}", response.statusCode(), response.body());
+                return false;
+            }
+        } catch (Exception ex) {
+            log.error("Exception during Brevo HTTPS API fallback send: ", ex);
+            return false;
+        }
+    }
+
+    private String toJsonString(String input) {
+        if (input == null) return "null";
+        StringBuilder sb = new StringBuilder("\"");
+        for (char c : input.toCharArray()) {
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\b' -> sb.append("\\b");
+                case '\f' -> sb.append("\\f");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < ' ') {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        sb.append("\"");
+        return sb.toString();
+    }
+
+    private String escapeJson(String input) {
+        if (input == null) return "";
+        return input.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String buildOtpEmailHtml(String otpCode) {
