@@ -29,7 +29,7 @@ spring:
             enable: true
             required: true
           ssl:
-            trust: smtp.gmail.com
+            trust: ${SPRING_MAIL_HOST:*}
 
 app:
   jwt:
