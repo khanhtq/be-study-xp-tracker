@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,6 +32,8 @@ import java.time.temporal.ChronoUnit;
 import com.studytracker.dto.UpdateProfileRequest;
 import com.studytracker.dto.ChangePasswordRequest;
 import com.studytracker.dto.TitleOptionDto;
+import com.studytracker.dto.PublicUserProfileDto;
+import com.studytracker.dto.UserSearchResponseDto;
 import com.studytracker.service.storage.FileStorageProvider;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.ArrayList;
@@ -380,7 +383,11 @@ public class UserService {
             u.setDisplayName(request.getDisplayName().trim());
         }
         if (request.getAvatarUrl() != null) {
-            u.setAvatarUrl(request.getAvatarUrl().trim());
+            String newAvatarUrl = request.getAvatarUrl().trim();
+            if (u.getAvatarUrl() != null && !u.getAvatarUrl().equalsIgnoreCase(newAvatarUrl)) {
+                fileStorageProvider.delete(u.getAvatarUrl());
+            }
+            u.setAvatarUrl(newAvatarUrl);
         }
         if (request.getBio() != null) {
             u.setBio(request.getBio().trim());
@@ -410,7 +417,7 @@ public class UserService {
         User u = userRepository.findById(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Tài khoản không tồn tại"));
 
-        if (u.getAvatarUrl() != null && u.getAvatarUrl().startsWith("/uploads/")) {
+        if (u.getAvatarUrl() != null && !u.getAvatarUrl().isEmpty()) {
             fileStorageProvider.delete(u.getAvatarUrl());
         }
 
@@ -517,5 +524,115 @@ public class UserService {
                     .currentXp(currentXp)
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    public List<UserSearchResponseDto> searchUsers(String query, User currentUser) {
+        if (query == null || query.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        String cleanQuery = query.trim();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        List<User> foundUsers = userRepository.findByDisplayNameContainingIgnoreCaseOrEmailContainingIgnoreCase(cleanQuery, cleanQuery, pageable);
+
+        Instant onlineThreshold = Instant.now().minus(Duration.ofMinutes(2));
+
+        return foundUsers.stream()
+                .filter(u -> u.getEnabled() == null || Boolean.TRUE.equals(u.getEnabled()))
+                .filter(u -> u.getRole() != com.studytracker.model.Role.ROLE_ADMIN)
+                .map(u -> {
+                    boolean isOnline = u.getLastActiveAt() != null && u.getLastActiveAt().isAfter(onlineThreshold);
+                    Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(u);
+                    boolean isStudying = activeSessionOpt.isPresent();
+
+                    return UserSearchResponseDto.builder()
+                            .userId(u.getId())
+                            .displayName(u.getDisplayName())
+                            .avatarUrl(u.getAvatarUrl())
+                            .selectedTitle(u.getSelectedTitle() != null ? u.getSelectedTitle() : "Tân Binh Tập Trung")
+                            .currentLevel(u.getCurrentLevel() != null ? u.getCurrentLevel() : 1)
+                            .totalXp(u.getTotalXp() != null ? u.getTotalXp() : 0L)
+                            .isOnline(isOnline)
+                            .isStudying(isStudying)
+                            .lastActiveAt(u.getLastActiveAt())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    public PublicUserProfileDto getPublicProfile(UUID userId) {
+        User u = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thành viên"));
+
+        Instant onlineThreshold = Instant.now().minus(Duration.ofMinutes(2));
+        boolean isOnline = u.getLastActiveAt() != null && u.getLastActiveAt().isAfter(onlineThreshold);
+
+        Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(u);
+        boolean isStudying = activeSessionOpt.isPresent();
+        String currentSubject = isStudying ? activeSessionOpt.get().getSubject() : null;
+        Instant studyStartedAt = isStudying ? activeSessionOpt.get().getStartedAt() : null;
+
+        int realtimeLevel = u.getCurrentLevel() != null ? u.getCurrentLevel() : 1;
+        int currentXp = u.getCurrentXp() != null ? u.getCurrentXp() : 0;
+
+        if (isStudying && studyStartedAt != null) {
+            long elapsedSeconds = Math.max(0, Duration.between(studyStartedAt, Instant.now()).getSeconds());
+            int xpEarned = xpService.calculateXpEarned((int) elapsedSeconds);
+            int tempXp = currentXp + xpEarned;
+            int tempLevel = realtimeLevel;
+
+            while (true) {
+                int xpRequired = xpService.getXpRequiredForNextLevel(tempLevel);
+                if (tempXp >= xpRequired) {
+                    tempXp -= xpRequired;
+                    tempLevel++;
+                } else {
+                    break;
+                }
+            }
+            realtimeLevel = tempLevel;
+        }
+
+        List<StudySession> completedSessions = studySessionRepository.findByUserAndEndedAtIsNotNullOrderByStartedAtDesc(u);
+        long totalSeconds = completedSessions.stream()
+                .mapToLong(s -> s.getDurationSeconds() != null ? s.getDurationSeconds() : 0)
+                .sum();
+        long totalStudyTimeMinutes = totalSeconds / 60;
+        long totalSessionsCount = completedSessions.size();
+
+        java.util.Set<java.time.LocalDate> studyDates = completedSessions.stream()
+                .map(s -> s.getStartedAt().atZone(java.time.ZoneId.systemDefault()).toLocalDate())
+                .collect(Collectors.toSet());
+
+        int streakDays = 0;
+        java.time.LocalDate checkDate = java.time.LocalDate.now();
+        if (!studyDates.contains(checkDate)) {
+            checkDate = checkDate.minusDays(1);
+        }
+        while (studyDates.contains(checkDate)) {
+            streakDays++;
+            checkDate = checkDate.minusDays(1);
+        }
+
+        int xpRequired = xpService.getXpRequiredForNextLevel(realtimeLevel);
+
+        return PublicUserProfileDto.builder()
+                .userId(u.getId())
+                .displayName(u.getDisplayName())
+                .avatarUrl(u.getAvatarUrl())
+                .selectedTitle(u.getSelectedTitle() != null ? u.getSelectedTitle() : "Tân Binh Tập Trung")
+                .studyGoal(u.getBio())
+                .currentLevel(realtimeLevel)
+                .currentXp(currentXp)
+                .xpRequiredForNextLevel(xpRequired)
+                .totalXp(u.getTotalXp() != null ? u.getTotalXp() : 0L)
+                .streakDays(streakDays)
+                .isOnline(isOnline)
+                .lastActiveAt(u.getLastActiveAt())
+                .isStudying(isStudying)
+                .currentSubject(currentSubject)
+                .studyStartedAt(studyStartedAt)
+                .totalStudyTimeMinutes(totalStudyTimeMinutes)
+                .totalSessionsCount(totalSessionsCount)
+                .build();
     }
 }

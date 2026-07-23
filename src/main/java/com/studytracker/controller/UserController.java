@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/users")
@@ -53,5 +54,17 @@ public class UserController {
     @GetMapping("/online")
     public ResponseEntity<List<OnlineUserResponse>> getOnlineUsers(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(userService.getOnlineUsers(user));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<UserSearchResponseDto>> searchUsers(
+            @AuthenticationPrincipal User user,
+            @RequestParam(value = "q", required = false, defaultValue = "") String query) {
+        return ResponseEntity.ok(userService.searchUsers(query, user));
+    }
+
+    @GetMapping("/{userId}/public-profile")
+    public ResponseEntity<PublicUserProfileDto> getPublicProfile(@PathVariable("userId") UUID userId) {
+        return ResponseEntity.ok(userService.getPublicProfile(userId));
     }
 }

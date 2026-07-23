@@ -20,4 +20,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Modifying
     void deleteByEnabledFalseAndCreatedAtBefore(Instant threshold);
+
+    List<User> findByDisplayNameContainingIgnoreCaseOrEmailContainingIgnoreCase(String displayNameKeyword, String emailKeyword, org.springframework.data.domain.Pageable pageable);
 }

@@ -83,12 +83,52 @@ public class CloudinaryStorageProviderImpl implements FileStorageProvider {
         return fallbackLocalProvider.loadAsResource(filename, subDirectory);
     }
 
+    public static String extractPublicId(String fileUrl) {
+        if (fileUrl == null || !fileUrl.contains("cloudinary.com")) {
+            return null;
+        }
+        try {
+            int uploadIndex = fileUrl.indexOf("/upload/");
+            if (uploadIndex == -1) return null;
+            String pathAfterUpload = fileUrl.substring(uploadIndex + "/upload/".length());
+            // Strip optional version prefix v12345678/ if present
+            if (pathAfterUpload.matches("^v\\d+/.*")) {
+                pathAfterUpload = pathAfterUpload.substring(pathAfterUpload.indexOf("/") + 1);
+            }
+            // Strip file extension (.jpg, .png, etc.)
+            int lastDot = pathAfterUpload.lastIndexOf('.');
+            if (lastDot != -1) {
+                pathAfterUpload = pathAfterUpload.substring(0, lastDot);
+            }
+            return pathAfterUpload;
+        } catch (Exception e) {
+            log.warn("Không thể bóc tách public_id từ Cloudinary URL: {}", fileUrl, e);
+            return null;
+        }
+    }
+
     @Override
     public void delete(String fileUrl) {
-        if (!isCloudinaryConfigured() || this.cloudinary == null || (fileUrl != null && fileUrl.startsWith("/uploads/"))) {
+        if (fileUrl == null || fileUrl.isEmpty()) {
+            return;
+        }
+
+        if (fileUrl.startsWith("/uploads/")) {
             fallbackLocalProvider.delete(fileUrl);
-        } else {
-            log.info("[Storage Status] Yêu cầu xóa file trên Cloudinary URL: {}", fileUrl);
+            return;
+        }
+
+        if (isCloudinaryConfigured() && this.cloudinary != null && fileUrl.contains("cloudinary.com")) {
+            String publicId = extractPublicId(fileUrl);
+            if (publicId != null) {
+                try {
+                    log.info("[Cloudinary Storage] Tự động xóa file cũ trên Cloudinary public_id: {}", publicId);
+                    Map result = this.cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+                    log.info("[Cloudinary Storage] Kết quả xóa file cũ Cloudinary: {}", result);
+                } catch (Exception e) {
+                    log.error("[Cloudinary Storage] Lỗi khi xóa file cũ trên Cloudinary URL: {}", fileUrl, e);
+                }
+            }
         }
     }
 }
