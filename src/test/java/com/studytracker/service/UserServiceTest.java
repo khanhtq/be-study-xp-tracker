@@ -94,4 +94,42 @@ class UserServiceTest {
         verify(userRepository, times(1)).delete(unverifiedUser);
         assertTrue(response.isRequiresVerification());
     }
+
+    @Test
+    void forgotPassword_ActiveUser_Success() {
+        User activeUser = User.builder()
+                .email("test@example.com")
+                .enabled(true)
+                .build();
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.encode(any())).thenReturn("hashedOtp");
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        com.studytracker.dto.ForgotPasswordRequest req = new com.studytracker.dto.ForgotPasswordRequest("test@example.com");
+        AuthResponse response = userService.forgotPassword(req);
+
+        assertTrue(response.isRequiresVerification());
+        verify(emailService, times(1)).sendPasswordResetEmail(eq("test@example.com"), anyString());
+    }
+
+    @Test
+    void resetPassword_ValidOtp_Success() {
+        User activeUser = User.builder()
+                .email("test@example.com")
+                .enabled(true)
+                .otpCode("hashedOtp")
+                .otpExpiresAt(java.time.Instant.now().plusSeconds(300))
+                .build();
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("1234", "hashedOtp")).thenReturn(true);
+        when(passwordEncoder.encode("newPassword123")).thenReturn("hashedNewPassword");
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        com.studytracker.dto.ResetPasswordRequest req = new com.studytracker.dto.ResetPasswordRequest("test@example.com", "1234", "newPassword123");
+        AuthResponse response = userService.resetPassword(req);
+
+        assertNotNull(response);
+        assertEquals("hashedNewPassword", activeUser.getPasswordHash());
+        assertNull(activeUser.getOtpCode());
+    }
 }

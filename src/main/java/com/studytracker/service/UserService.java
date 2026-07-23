@@ -64,7 +64,7 @@ public class UserService {
             userRepository.flush();
         }
 
-        String otpCode = generate4DigitOtp();
+        String rawOtp = generate4DigitOtp();
         Instant now = Instant.now();
 
         User user = User.builder()
@@ -75,15 +75,15 @@ public class UserService {
                 .currentXp(0)
                 .totalXp(0L)
                 .enabled(false)
-                .otpCode(otpCode)
+                .otpCode(passwordEncoder.encode(rawOtp))
                 .otpExpiresAt(now.plus(5, ChronoUnit.MINUTES))
                 .lastOtpSentAt(now)
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        // Gửi email OTP ngầm bất đồng bộ
-        emailService.sendOtpEmail(email, otpCode);
+        // Gửi email OTP ngầm bất đồng bộ với mã thô 4 số
+        emailService.sendOtpEmail(email, rawOtp);
 
         return AuthResponse.builder()
                 .requiresVerification(true)
@@ -118,8 +118,8 @@ public class UserService {
             throw new IllegalArgumentException("Mã OTP đã hết hạn (quá 5 phút). Thông tin đăng ký đã bị xóa, vui lòng đăng ký mới.");
         }
 
-        // Kiểm tra mã OTP
-        if (!request.getOtp().trim().equals(user.getOtpCode())) {
+        // Kiểm tra mã OTP qua băm BCrypt
+        if (user.getOtpCode() == null || !passwordEncoder.matches(request.getOtp().trim(), user.getOtpCode())) {
             throw new IllegalArgumentException("Mã OTP xác minh không chính xác. Vui lòng thử lại.");
         }
 
@@ -164,20 +164,121 @@ public class UserService {
         }
 
         // Tạo lại OTP mới
-        String newOtp = generate4DigitOtp();
+        String newRawOtp = generate4DigitOtp();
         Instant now = Instant.now();
-        user.setOtpCode(newOtp);
+        user.setOtpCode(passwordEncoder.encode(newRawOtp));
         user.setOtpExpiresAt(now.plus(5, ChronoUnit.MINUTES));
         user.setLastOtpSentAt(now);
         userRepository.save(user);
 
         // Gửi email OTP mới
-        emailService.sendOtpEmail(user.getEmail(), newOtp);
+        emailService.sendOtpEmail(user.getEmail(), newRawOtp);
 
         return AuthResponse.builder()
                 .requiresVerification(true)
                 .email(user.getEmail())
                 .message("Mã OTP mới đã được gửi tới email của bạn.")
+                .build();
+    }
+
+    @Transactional
+    public AuthResponse forgotPassword(com.studytracker.dto.ForgotPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản đã kích hoạt với địa chỉ email này."));
+
+        if (Boolean.FALSE.equals(user.getEnabled())) {
+            throw new IllegalArgumentException("Tài khoản chưa được kích hoạt. Vui lòng tiến hành đăng ký và kích hoạt tài khoản.");
+        }
+
+        // Kiểm tra Rate Limit 1 phút (60s)
+        if (user.getLastOtpSentAt() != null) {
+            long secondsSinceLastSent = Duration.between(user.getLastOtpSentAt(), Instant.now()).getSeconds();
+            if (secondsSinceLastSent < 60) {
+                long waitSeconds = 60 - secondsSinceLastSent;
+                throw new IllegalArgumentException("Vui lòng đợi " + waitSeconds + " giây trước khi yêu cầu mã OTP mới.");
+            }
+        }
+
+        String rawOtp = generate4DigitOtp();
+        Instant now = Instant.now();
+
+        user.setOtpCode(passwordEncoder.encode(rawOtp));
+        user.setOtpExpiresAt(now.plus(5, ChronoUnit.MINUTES));
+        user.setLastOtpSentAt(now);
+        userRepository.save(user);
+
+        // Gửi email khôi phục mật khẩu chứa OTP thô 4 chữ số
+        emailService.sendPasswordResetEmail(user.getEmail(), rawOtp);
+
+        return AuthResponse.builder()
+                .requiresVerification(true)
+                .email(user.getEmail())
+                .message("Mã OTP khôi phục mật khẩu đã được gửi tới email của bạn.")
+                .build();
+    }
+
+    @Transactional
+    public AuthResponse verifyResetOtp(com.studytracker.dto.VerifyResetOtpRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thông tin tài khoản. Vui lòng thực hiện lại."));
+
+        if (Boolean.FALSE.equals(user.getEnabled())) {
+            throw new IllegalArgumentException("Tài khoản chưa được kích hoạt.");
+        }
+
+        // Kiểm tra hạn OTP (5 phút)
+        if (user.getOtpExpiresAt() == null || Instant.now().isAfter(user.getOtpExpiresAt())) {
+            user.setOtpCode(null);
+            user.setOtpExpiresAt(null);
+            userRepository.save(user);
+            throw new IllegalArgumentException("Mã OTP khôi phục mật khẩu đã hết hạn (quá 5 phút). Vui lòng yêu cầu mã mới.");
+        }
+
+        // Đối chiếu BCrypt OTP
+        if (user.getOtpCode() == null || !passwordEncoder.matches(request.getOtp().trim(), user.getOtpCode())) {
+            throw new IllegalArgumentException("Mã OTP xác minh không chính xác. Vui lòng thử lại.");
+        }
+
+        return AuthResponse.builder()
+                .email(user.getEmail())
+                .message("Xác minh mã OTP thành công! Vui lòng nhập mật khẩu mới.")
+                .build();
+    }
+
+    @Transactional
+    public AuthResponse resetPassword(com.studytracker.dto.ResetPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thông tin tài khoản. Vui lòng thực hiện lại."));
+
+        if (Boolean.FALSE.equals(user.getEnabled())) {
+            throw new IllegalArgumentException("Tài khoản chưa được kích hoạt.");
+        }
+
+        // Kiểm tra hạn OTP (5 phút)
+        if (user.getOtpExpiresAt() == null || Instant.now().isAfter(user.getOtpExpiresAt())) {
+            user.setOtpCode(null);
+            user.setOtpExpiresAt(null);
+            userRepository.save(user);
+            throw new IllegalArgumentException("Mã OTP đã hết hạn (quá 5 phút). Vui lòng yêu cầu gửi lại mã OTP.");
+        }
+
+        // Đối chiếu BCrypt OTP
+        if (user.getOtpCode() == null || !passwordEncoder.matches(request.getOtp().trim(), user.getOtpCode())) {
+            throw new IllegalArgumentException("Mã OTP không chính xác hoặc không hợp lệ.");
+        }
+
+        // Đặt lại mật khẩu mới
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setOtpCode(null);
+        user.setOtpExpiresAt(null);
+        userRepository.save(user);
+
+        return AuthResponse.builder()
+                .email(user.getEmail())
+                .message("Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại với mật khẩu mới.")
                 .build();
     }
 

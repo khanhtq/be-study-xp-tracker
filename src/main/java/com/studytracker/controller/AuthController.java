@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.studytracker.dto.ResendOtpRequest;
 import com.studytracker.dto.VerifyOtpRequest;
 
+import com.studytracker.dto.ForgotPasswordRequest;
+import com.studytracker.dto.ResetPasswordRequest;
+import com.studytracker.dto.VerifyResetOtpRequest;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -35,6 +39,21 @@ public class AuthController {
     @PostMapping("/resend-otp")
     public ResponseEntity<AuthResponse> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
         return ResponseEntity.ok(userService.resendOtp(request));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<AuthResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ResponseEntity.ok(userService.forgotPassword(request));
+    }
+
+    @PostMapping("/verify-reset-otp")
+    public ResponseEntity<AuthResponse> verifyResetOtp(@Valid @RequestBody VerifyResetOtpRequest request) {
+        return ResponseEntity.ok(userService.verifyResetOtp(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<AuthResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ResponseEntity.ok(userService.resetPassword(request));
     }
 
     @PostMapping("/login")
