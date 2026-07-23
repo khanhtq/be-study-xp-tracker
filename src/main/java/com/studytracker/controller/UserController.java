@@ -1,14 +1,15 @@
 package com.studytracker.controller;
 
-import com.studytracker.dto.UserProgressResponse;
+import com.studytracker.dto.*;
 import com.studytracker.model.User;
 import com.studytracker.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -22,8 +23,35 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserProgress(user));
     }
 
+    @PutMapping("/profile")
+    public ResponseEntity<UserProgressResponse> updateProfile(
+            @AuthenticationPrincipal User user,
+            @RequestBody UpdateProfileRequest request) {
+        return ResponseEntity.ok(userService.updateProfile(user, request));
+    }
+
+    @PostMapping("/avatar")
+    public ResponseEntity<UserProgressResponse> uploadAvatar(
+            @AuthenticationPrincipal User user,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(userService.uploadAvatar(user, file));
+    }
+
+    @PutMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal User user,
+            @RequestBody ChangePasswordRequest request) {
+        userService.changePassword(user, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/titles")
+    public ResponseEntity<List<TitleOptionDto>> getAvailableTitles(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(userService.getAvailableTitles(user));
+    }
+
     @GetMapping("/online")
-    public ResponseEntity<java.util.List<com.studytracker.dto.OnlineUserResponse>> getOnlineUsers(@AuthenticationPrincipal User user) {
+    public ResponseEntity<List<OnlineUserResponse>> getOnlineUsers(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(userService.getOnlineUsers(user));
     }
 }

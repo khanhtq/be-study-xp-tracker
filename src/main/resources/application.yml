@@ -33,6 +33,13 @@ spring:
             trust: ${SPRING_MAIL_HOST:*}
 
 app:
+  storage:
+    provider: ${STORAGE_PROVIDER:local} # Đổi thành 'cloudinary' khi muốn dùng Cloudinary
+    upload-dir: ${UPLOAD_DIR:uploads}
+    cloudinary:
+      cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+      api-key: ${CLOUDINARY_API_KEY:}
+      api-secret: ${CLOUDINARY_API_SECRET:}
   google:
     client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
   jwt:

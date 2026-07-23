@@ -28,6 +28,13 @@ import com.studytracker.dto.VerifyOtpRequest;
 import java.security.SecureRandom;
 import java.time.temporal.ChronoUnit;
 
+import com.studytracker.dto.UpdateProfileRequest;
+import com.studytracker.dto.ChangePasswordRequest;
+import com.studytracker.dto.TitleOptionDto;
+import com.studytracker.service.storage.FileStorageProvider;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.ArrayList;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -39,6 +46,7 @@ public class UserService {
     private final AuthenticationManager authenticationManager;
     private final XpService xpService;
     private final EmailService emailService;
+    private final FileStorageProvider fileStorageProvider;
 
     private String generate4DigitOtp() {
         SecureRandom random = new SecureRandom();
@@ -341,17 +349,119 @@ public class UserService {
     }
 
     public UserProgressResponse getUserProgress(User user) {
-        int xpRequired = xpService.getXpRequiredForNextLevel(user.getCurrentLevel());
+        User u = userRepository.findById(user.getId()).orElse(user);
+        int xpRequired = xpService.getXpRequiredForNextLevel(u.getCurrentLevel());
         return UserProgressResponse.builder()
-                .userId(user.getId())
-                .email(user.getEmail())
-                .displayName(user.getDisplayName())
-                .role(user.getRole() != null ? user.getRole().name() : "ROLE_USER")
-                .currentLevel(user.getCurrentLevel())
-                .currentXp(user.getCurrentXp())
+                .userId(u.getId())
+                .email(u.getEmail())
+                .displayName(u.getDisplayName())
+                .avatarUrl(u.getAvatarUrl())
+                .bio(u.getBio())
+                .dailyGoalMinutes(u.getDailyGoalMinutes() != null ? u.getDailyGoalMinutes() : 60)
+                .favoriteSubjects(u.getFavoriteSubjects())
+                .selectedTitle(u.getSelectedTitle() != null ? u.getSelectedTitle() : "Tân Binh Tập Trung")
+                .themeAccent(u.getThemeAccent() != null ? u.getThemeAccent() : "indigo")
+                .soundEnabled(u.getSoundEnabled() != null ? u.getSoundEnabled() : true)
+                .authProvider(u.getAuthProvider() != null ? u.getAuthProvider().name() : "LOCAL")
+                .role(u.getRole() != null ? u.getRole().name() : "ROLE_USER")
+                .currentLevel(u.getCurrentLevel())
+                .currentXp(u.getCurrentXp())
                 .xpRequiredForNextLevel(xpRequired)
-                .totalXp(user.getTotalXp())
+                .totalXp(u.getTotalXp())
                 .build();
+    }
+
+    @Transactional
+    public UserProgressResponse updateProfile(User user, UpdateProfileRequest request) {
+        User u = userRepository.findById(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Tài khoản không tồn tại"));
+
+        if (request.getDisplayName() != null) {
+            u.setDisplayName(request.getDisplayName().trim());
+        }
+        if (request.getAvatarUrl() != null) {
+            u.setAvatarUrl(request.getAvatarUrl().trim());
+        }
+        if (request.getBio() != null) {
+            u.setBio(request.getBio().trim());
+        }
+        if (request.getDailyGoalMinutes() != null && request.getDailyGoalMinutes() > 0) {
+            u.setDailyGoalMinutes(request.getDailyGoalMinutes());
+        }
+        if (request.getFavoriteSubjects() != null) {
+            u.setFavoriteSubjects(request.getFavoriteSubjects().trim());
+        }
+        if (request.getSelectedTitle() != null) {
+            u.setSelectedTitle(request.getSelectedTitle().trim());
+        }
+        if (request.getThemeAccent() != null) {
+            u.setThemeAccent(request.getThemeAccent().trim());
+        }
+        if (request.getSoundEnabled() != null) {
+            u.setSoundEnabled(request.getSoundEnabled());
+        }
+
+        User updatedUser = userRepository.save(u);
+        return getUserProgress(updatedUser);
+    }
+
+    @Transactional
+    public UserProgressResponse uploadAvatar(User user, MultipartFile file) {
+        User u = userRepository.findById(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Tài khoản không tồn tại"));
+
+        if (u.getAvatarUrl() != null && u.getAvatarUrl().startsWith("/uploads/")) {
+            fileStorageProvider.delete(u.getAvatarUrl());
+        }
+
+        String avatarUrl = fileStorageProvider.store(file, "avatars");
+        u.setAvatarUrl(avatarUrl);
+        User updatedUser = userRepository.save(u);
+        return getUserProgress(updatedUser);
+    }
+
+    @Transactional
+    public void changePassword(User user, ChangePasswordRequest request) {
+        User u = userRepository.findById(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Tài khoản không tồn tại"));
+
+        if (u.getAuthProvider() == com.studytracker.model.AuthProvider.GOOGLE) {
+            throw new IllegalArgumentException("Tài khoản đăng nhập bằng Google không thể thay đổi mật khẩu tại đây.");
+        }
+
+        if (request.getCurrentPassword() == null || request.getCurrentPassword().isEmpty()) {
+            throw new IllegalArgumentException("Vui lòng nhập mật khẩu hiện tại.");
+        }
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), u.getPasswordHash())) {
+            throw new IllegalArgumentException("Mật khẩu hiện tại không chính xác.");
+        }
+
+        if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
+            throw new IllegalArgumentException("Mật khẩu mới phải chứa ít nhất 6 ký tự.");
+        }
+
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new IllegalArgumentException("Xác nhận mật khẩu mới không trùng khớp.");
+        }
+
+        u.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(u);
+    }
+
+    public List<TitleOptionDto> getAvailableTitles(User user) {
+        User u = userRepository.findById(user.getId()).orElse(user);
+        int userLevel = u.getCurrentLevel() != null ? u.getCurrentLevel() : 1;
+
+        List<TitleOptionDto> titles = new ArrayList<>();
+        titles.add(new TitleOptionDto("Tân Binh Tập Trung", "Dành cho mọi thành viên mới bắt đầu hành trình học tập", 1, userLevel >= 1));
+        titles.add(new TitleOptionDto("Học Giả Bền Bỉ", "Đạt Level 3 - Chứng tỏ tinh thần học tập kiên trì", 3, userLevel >= 3));
+        titles.add(new TitleOptionDto("Chiến Binh Pomodoro", "Đạt Level 5 - Làm chủ kỹ năng quản lý thời gian", 5, userLevel >= 5));
+        titles.add(new TitleOptionDto("Bậc Thầy Tập Trung", "Đạt Level 10 - Khả năng siêu tập trung không xao nhãng", 10, userLevel >= 10));
+        titles.add(new TitleOptionDto("Đại Sứ Học Thuật", "Đạt Level 15 - Đỉnh cao tri thức và chuyên năng", 15, userLevel >= 15));
+        titles.add(new TitleOptionDto("Huyền Thoại XP", "Đạt Level 25 - Huyền thoại trong giới cày XP học tập", 25, userLevel >= 25));
+
+        return titles;
     }
 
     @Transactional
@@ -397,6 +507,8 @@ public class UserService {
             return OnlineUserResponse.builder()
                     .userId(u.getId())
                     .displayName(u.getDisplayName())
+                    .avatarUrl(u.getAvatarUrl())
+                    .selectedTitle(u.getSelectedTitle())
                     .lastActiveAt(u.getLastActiveAt())
                     .isStudying(isStudying)
                     .currentSubject(currentSubject)

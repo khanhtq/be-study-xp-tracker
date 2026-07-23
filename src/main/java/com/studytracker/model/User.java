@@ -34,6 +34,22 @@ public class User implements UserDetails {
 
     private String avatarUrl;
 
+    private String bio;
+
+    @Builder.Default
+    private Integer dailyGoalMinutes = 60;
+
+    private String favoriteSubjects;
+
+    @Builder.Default
+    private String selectedTitle = "Tân Binh Tập Trung";
+
+    @Builder.Default
+    private String themeAccent = "indigo";
+
+    @Builder.Default
+    private Boolean soundEnabled = true;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "auth_provider")

@@ -15,6 +15,8 @@ import java.util.UUID;
 public class OnlineUserResponse {
     private UUID userId;
     private String displayName;
+    private String avatarUrl;
+    private String selectedTitle;
     private Instant lastActiveAt;
     private Boolean isStudying;
     private String currentSubject;

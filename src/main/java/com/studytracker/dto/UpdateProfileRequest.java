@@ -5,15 +5,11 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserProgressResponse {
-    private UUID userId;
-    private String email;
+public class UpdateProfileRequest {
     private String displayName;
     private String avatarUrl;
     private String bio;
@@ -22,10 +18,4 @@ public class UserProgressResponse {
     private String selectedTitle;
     private String themeAccent;
     private Boolean soundEnabled;
-    private String authProvider;
-    private String role;
-    private Integer currentLevel;
-    private Integer currentXp;
-    private Integer xpRequiredForNextLevel;
-    private Long totalXp;
 }
