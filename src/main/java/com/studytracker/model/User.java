@@ -60,6 +60,11 @@ public class User implements UserDetails {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(name = "message_permission")
+    private MessagePermission messagePermission = MessagePermission.EVERYONE;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(name = "auth_provider")
     private AuthProvider authProvider = AuthProvider.LOCAL;
 

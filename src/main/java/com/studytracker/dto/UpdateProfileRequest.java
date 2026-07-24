@@ -20,4 +20,5 @@ public class UpdateProfileRequest {
     private Boolean soundEnabled;
     private String preferredLanguage;
     private String activityStatusVisibility;
+    private String messagePermission;
 }

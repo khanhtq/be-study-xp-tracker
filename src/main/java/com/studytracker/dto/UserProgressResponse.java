@@ -24,6 +24,7 @@ public class UserProgressResponse {
     private Boolean soundEnabled;
     private String preferredLanguage;
     private String activityStatusVisibility;
+    private String messagePermission;
     private String authProvider;
     private String role;
     private Integer currentLevel;
@@ -31,4 +32,5 @@ public class UserProgressResponse {
     private Integer xpRequiredForNextLevel;
     private Long totalXp;
     private Long pendingFriendRequestsCount;
+    private Long unreadMessagesCount;
 }

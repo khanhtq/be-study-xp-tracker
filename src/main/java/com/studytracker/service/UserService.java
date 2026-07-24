@@ -52,6 +52,7 @@ public class UserService {
     private final FileStorageProvider fileStorageProvider;
     private final com.studytracker.repository.FriendshipRepository friendshipRepository;
     private final FriendshipService friendshipService;
+    private final com.studytracker.repository.MessageRepository messageRepository;
 
     private String generate4DigitOtp() {
         SecureRandom random = new SecureRandom();
@@ -357,6 +358,7 @@ public class UserService {
         User u = userRepository.findById(user.getId()).orElse(user);
         int xpRequired = xpService.getXpRequiredForNextLevel(u.getCurrentLevel());
         long pendingCount = friendshipService.getPendingRequestsCount(u);
+        long unreadCount = messageRepository.countByRecipientIdAndIsReadFalse(u.getId());
 
         return UserProgressResponse.builder()
                 .userId(u.getId())
@@ -371,6 +373,7 @@ public class UserService {
                 .soundEnabled(u.getSoundEnabled() != null ? u.getSoundEnabled() : true)
                 .preferredLanguage(u.getPreferredLanguage() != null ? u.getPreferredLanguage() : "en")
                 .activityStatusVisibility(u.getActivityStatusVisibility() != null ? u.getActivityStatusVisibility().name() : "EVERYONE")
+                .messagePermission(u.getMessagePermission() != null ? u.getMessagePermission().name() : "EVERYONE")
                 .authProvider(u.getAuthProvider() != null ? u.getAuthProvider().name() : "LOCAL")
                 .role(u.getRole() != null ? u.getRole().name() : "ROLE_USER")
                 .currentLevel(u.getCurrentLevel())
@@ -378,6 +381,7 @@ public class UserService {
                 .xpRequiredForNextLevel(xpRequired)
                 .totalXp(u.getTotalXp())
                 .pendingFriendRequestsCount(pendingCount)
+                .unreadMessagesCount(unreadCount)
                 .build();
     }
 
@@ -423,6 +427,12 @@ public class UserService {
         if (request.getActivityStatusVisibility() != null) {
             try {
                 u.setActivityStatusVisibility(com.studytracker.model.ActivityStatusVisibility.valueOf(request.getActivityStatusVisibility().trim().toUpperCase()));
+            } catch (Exception ignored) {
+            }
+        }
+        if (request.getMessagePermission() != null) {
+            try {
+                u.setMessagePermission(com.studytracker.model.MessagePermission.valueOf(request.getMessagePermission().trim().toUpperCase()));
             } catch (Exception ignored) {
             }
         }
