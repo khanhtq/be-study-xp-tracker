@@ -45,7 +45,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.web.cors.CorsUtils::isPreFlightRequest).permitAll()
-                        .requestMatchers("/api/auth/**", "/api/health", "/error", "/uploads/**", "/ws/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/health", "/api/music/**", "/error", "/uploads/**", "/ws/**").permitAll()
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
