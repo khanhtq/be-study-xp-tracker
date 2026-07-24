@@ -16,22 +16,19 @@ import java.util.UUID;
 public interface FriendshipRepository extends JpaRepository<Friendship, UUID> {
 
     @Query("SELECT f FROM Friendship f WHERE " +
-           "(f.requester = :u1 AND f.addressee = :u2) OR " +
-           "(f.requester = :u2 AND f.addressee = :u1)")
-    Optional<Friendship> findBetweenUsers(@Param("u1") User u1, @Param("u2") User u2);
-
-    @Query("SELECT f FROM Friendship f WHERE " +
            "(f.requester.id = :u1Id AND f.addressee.id = :u2Id) OR " +
            "(f.requester.id = :u2Id AND f.addressee.id = :u1Id)")
     Optional<Friendship> findBetweenUserIds(@Param("u1Id") UUID u1Id, @Param("u2Id") UUID u2Id);
 
     @Query("SELECT f FROM Friendship f WHERE " +
-           "(f.requester = :user OR f.addressee = :user) AND f.status = :status")
-    List<Friendship> findAllByUserAndStatus(@Param("user") User user, @Param("status") FriendshipStatus status);
+           "(f.requester.id = :userId OR f.addressee.id = :userId) AND f.status = :status")
+    List<Friendship> findAllByUserIdAndStatus(@Param("userId") UUID userId, @Param("status") FriendshipStatus status);
 
-    List<Friendship> findByAddresseeAndStatusOrderByCreatedAtDesc(User addressee, FriendshipStatus status);
+    @Query("SELECT f FROM Friendship f WHERE f.addressee.id = :userId AND f.status = :status ORDER BY f.createdAt DESC")
+    List<Friendship> findByAddresseeIdAndStatus(@Param("userId") UUID userId, @Param("status") FriendshipStatus status);
 
-    List<Friendship> findByRequesterAndStatusOrderByCreatedAtDesc(User requester, FriendshipStatus status);
+    @Query("SELECT f FROM Friendship f WHERE f.requester.id = :userId AND f.status = :status ORDER BY f.createdAt DESC")
+    List<Friendship> findByRequesterIdAndStatus(@Param("userId") UUID userId, @Param("status") FriendshipStatus status);
 
     @Query("SELECT COUNT(f) > 0 FROM Friendship f WHERE " +
            "((f.requester.id = :u1Id AND f.addressee.id = :u2Id) OR " +
@@ -39,5 +36,6 @@ public interface FriendshipRepository extends JpaRepository<Friendship, UUID> {
            "f.status = 'ACCEPTED'")
     boolean isFriends(@Param("u1Id") UUID u1Id, @Param("u2Id") UUID u2Id);
 
-    long countByAddresseeAndStatus(User addressee, FriendshipStatus status);
+    @Query("SELECT COUNT(f) FROM Friendship f WHERE f.addressee.id = :userId AND f.status = :status")
+    long countByAddresseeIdAndStatus(@Param("userId") UUID userId, @Param("status") FriendshipStatus status);
 }

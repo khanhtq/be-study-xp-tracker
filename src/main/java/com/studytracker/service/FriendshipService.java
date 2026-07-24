@@ -49,10 +49,13 @@ public class FriendshipService {
             throw new IllegalArgumentException("Không thể gửi lời mời kết bạn cho chính mình.");
         }
 
+        User requester = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tài khoản người gửi."));
+
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng."));
 
-        Optional<Friendship> existingOpt = friendshipRepository.findBetweenUsers(currentUser, targetUser);
+        Optional<Friendship> existingOpt = friendshipRepository.findBetweenUserIds(currentUser.getId(), targetUserId);
 
         if (existingOpt.isPresent()) {
             Friendship existing = existingOpt.get();
@@ -73,7 +76,7 @@ public class FriendshipService {
                 }
             }
             // If DECLINED or BLOCKED -> update to PENDING
-            existing.setRequester(currentUser);
+            existing.setRequester(requester);
             existing.setAddressee(targetUser);
             existing.setStatus(FriendshipStatus.PENDING);
             Friendship saved = friendshipRepository.save(existing);
@@ -84,7 +87,7 @@ public class FriendshipService {
         }
 
         Friendship friendship = Friendship.builder()
-                .requester(currentUser)
+                .requester(requester)
                 .addressee(targetUser)
                 .status(FriendshipStatus.PENDING)
                 .build();
@@ -128,7 +131,7 @@ public class FriendshipService {
         User friend = userRepository.findById(friendId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng."));
 
-        Friendship friendship = friendshipRepository.findBetweenUsers(currentUser, friend)
+        Friendship friendship = friendshipRepository.findBetweenUserIds(currentUser.getId(), friendId)
                 .orElseThrow(() -> new IllegalArgumentException("Mối quan hệ bạn bè không tồn tại."));
 
         friendshipRepository.delete(friendship);
@@ -136,7 +139,7 @@ public class FriendshipService {
 
     @Transactional(readOnly = true)
     public List<FriendDto> getFriends(User currentUser) {
-        List<Friendship> friendships = friendshipRepository.findAllByUserAndStatus(currentUser, FriendshipStatus.ACCEPTED);
+        List<Friendship> friendships = friendshipRepository.findAllByUserIdAndStatus(currentUser.getId(), FriendshipStatus.ACCEPTED);
 
         Instant onlineThreshold = Instant.now().minus(Duration.ofMinutes(2));
 
@@ -203,7 +206,7 @@ public class FriendshipService {
 
     @Transactional(readOnly = true)
     public List<FriendDto> getPendingRequestsReceived(User currentUser) {
-        List<Friendship> friendships = friendshipRepository.findByAddresseeAndStatusOrderByCreatedAtDesc(currentUser, FriendshipStatus.PENDING);
+        List<Friendship> friendships = friendshipRepository.findByAddresseeIdAndStatus(currentUser.getId(), FriendshipStatus.PENDING);
 
         return friendships.stream().map(f -> {
             User requester = f.getRequester();
@@ -224,7 +227,7 @@ public class FriendshipService {
 
     @Transactional(readOnly = true)
     public List<FriendDto> getPendingRequestsSent(User currentUser) {
-        List<Friendship> friendships = friendshipRepository.findByRequesterAndStatusOrderByCreatedAtDesc(currentUser, FriendshipStatus.PENDING);
+        List<Friendship> friendships = friendshipRepository.findByRequesterIdAndStatus(currentUser.getId(), FriendshipStatus.PENDING);
 
         return friendships.stream().map(f -> {
             User addressee = f.getAddressee();
@@ -252,7 +255,7 @@ public class FriendshipService {
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng."));
 
-        Optional<Friendship> friendshipOpt = friendshipRepository.findBetweenUsers(currentUser, targetUser);
+        Optional<Friendship> friendshipOpt = friendshipRepository.findBetweenUserIds(currentUser.getId(), targetUserId);
 
         if (friendshipOpt.isEmpty()) {
             return FriendshipStatusDto.builder().status("NONE").build();
@@ -286,6 +289,6 @@ public class FriendshipService {
     }
 
     public long getPendingRequestsCount(User currentUser) {
-        return friendshipRepository.countByAddresseeAndStatus(currentUser, FriendshipStatus.PENDING);
+        return friendshipRepository.countByAddresseeIdAndStatus(currentUser.getId(), FriendshipStatus.PENDING);
     }
 }
