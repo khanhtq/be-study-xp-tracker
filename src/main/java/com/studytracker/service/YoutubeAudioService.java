@@ -204,10 +204,35 @@ public class YoutubeAudioService {
         return Collections.emptyList();
     }
 
+    private boolean isNonMusicVideo(String title) {
+        if (title == null || title.isBlank()) return false;
+        String lower = title.toLowerCase();
+        return lower.contains("vlog") ||
+               lower.contains("prank") ||
+               lower.contains("review") ||
+               lower.contains("reaction") ||
+               lower.contains("gameplay") ||
+               lower.contains("gaming") ||
+               lower.contains("unboxing") ||
+               lower.contains("phim ngắn") ||
+               lower.contains("tập ") ||
+               lower.contains("hài ") ||
+               lower.contains("tâm sự") ||
+               lower.contains("thử thách") ||
+               lower.contains("tin tức") ||
+               lower.contains("thời sự") ||
+               lower.contains("talkshow") ||
+               lower.contains("interview");
+    }
+
     private List<MusicTrackDto> searchViaYoutubeScraper(String query) {
         try {
-            String encodedQuery = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8);
-            String url = "https://www.youtube.com/results?search_query=" + encodedQuery;
+            String musicQuery = query.toLowerCase().matches(".*(music|song|nhạc|audio|lofi|piano|cover|remix|official|beat|mv).*")
+                    ? query
+                    : query + " music audio";
+            String encodedQuery = URLEncoder.encode(musicQuery.trim(), StandardCharsets.UTF_8);
+            // Append YouTube Video Filter parameter sp=EgIQAw%253D%253D (Filter strictly Videos/Music)
+            String url = "https://www.youtube.com/results?search_query=" + encodedQuery + "&sp=EgIQAw%253D%253D";
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -256,6 +281,8 @@ public class YoutubeAudioService {
                                 if (videoId.isEmpty()) continue;
 
                                 String title = videoRenderer.path("title").path("runs").path(0).path("text").asText("Unknown Title");
+                                if (isNonMusicVideo(title)) continue;
+
                                 String uploader = videoRenderer.path("ownerText").path("runs").path(0).path("text").asText("Unknown Artist");
                                 String thumbnail = "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg";
 
@@ -292,7 +319,7 @@ public class YoutubeAudioService {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     ytDlpPath,
-                    "ytsearch10:" + query,
+                    "ytmsearch10:" + query,
                     "--flat-playlist",
                     "--dump-json",
                     "--no-download",
@@ -313,6 +340,8 @@ public class YoutubeAudioService {
                         if (id.isEmpty()) continue;
 
                         String title = node.path("title").asText("Unknown");
+                        if (isNonMusicVideo(title)) continue;
+
                         String uploader = node.path("uploader").asText(node.path("channel").asText("Unknown"));
                         long duration = node.path("duration").asLong(0L);
                         String thumbnail = "https://img.youtube.com/vi/" + id + "/hqdefault.jpg";
@@ -361,11 +390,12 @@ public class YoutubeAudioService {
                     for (JsonNode item : items) {
                         String url = item.path("url").asText("");
                         String id = url.contains("/watch?v=") ? url.replace("/watch?v=", "") : item.path("id").asText("");
-                        if (id.isEmpty()) continue;
+                        String title = item.path("title").asText("Unknown");
+                        if (isNonMusicVideo(title)) continue;
 
                         results.add(new MusicTrackDto(
                                 id,
-                                item.path("title").asText("Unknown"),
+                                title,
                                 item.path("uploaderName").asText("Unknown"),
                                 item.path("thumbnail").asText("https://img.youtube.com/vi/" + id + "/hqdefault.jpg"),
                                 item.path("duration").asLong(0L)
