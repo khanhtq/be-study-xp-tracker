@@ -215,24 +215,14 @@ public class YoutubeAudioService {
                lower.contains("gaming") ||
                lower.contains("unboxing") ||
                lower.contains("phim ngắn") ||
-               lower.contains("tập ") ||
-               lower.contains("hài ") ||
-               lower.contains("tâm sự") ||
-               lower.contains("thử thách") ||
                lower.contains("tin tức") ||
-               lower.contains("thời sự") ||
-               lower.contains("talkshow") ||
-               lower.contains("interview");
+               lower.contains("thời sự");
     }
 
     private List<MusicTrackDto> searchViaYoutubeScraper(String query) {
         try {
-            String musicQuery = query.toLowerCase().matches(".*(music|song|nhạc|audio|lofi|piano|cover|remix|official|beat|mv).*")
-                    ? query
-                    : query + " music audio";
-            String encodedQuery = URLEncoder.encode(musicQuery.trim(), StandardCharsets.UTF_8);
-            // Append YouTube Video Filter parameter sp=EgIQAw%253D%253D (Filter strictly Videos/Music)
-            String url = "https://www.youtube.com/results?search_query=" + encodedQuery + "&sp=EgIQAw%253D%253D";
+            String encodedQuery = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8);
+            String url = "https://www.youtube.com/results?search_query=" + encodedQuery;
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -319,7 +309,7 @@ public class YoutubeAudioService {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     ytDlpPath,
-                    "ytmsearch10:" + query,
+                    "ytsearch10:" + query,
                     "--flat-playlist",
                     "--dump-json",
                     "--no-download",
