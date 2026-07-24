@@ -29,7 +29,7 @@ public class YoutubeAudioService {
             .connectTimeout(Duration.ofSeconds(3))
             .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
-    private final ExecutorService executor = Executors.newFixedThreadPool(10);
+    private final ExecutorService executor = Executors.newFixedThreadPool(3);
 
     private static final String[] PIPED_INSTANCES = {
             "https://pipedapi.kavin.rocks",
@@ -54,7 +54,7 @@ public class YoutubeAudioService {
 
     /** Simple TTL cache for resolved stream URLs */
     private final ConcurrentHashMap<String, CachedStreamUrl> streamCache = new ConcurrentHashMap<>();
-    private static final long CACHE_TTL_MS = 3 * 60 * 60 * 1000L; // 3 hours (yt-dlp URLs expire ~6h)
+    private static final long CACHE_TTL_MS = 3 * 60 * 60 * 1000L; // 3 hours
 
     private record CachedStreamUrl(String url, long expiresAt) {
         boolean isValid() {
@@ -65,7 +65,6 @@ public class YoutubeAudioService {
     /** Track whether yt-dlp is available on this machine */
     private volatile Boolean ytDlpAvailable = null;
 
-    // yt-dlp executable path: prefer PATH, fallback to known install location
     private static final String[] YT_DLP_PATHS = {
             "yt-dlp",
             "/usr/local/bin/yt-dlp",
@@ -159,14 +158,14 @@ public class YoutubeAudioService {
         return playlists;
     }
 
-    // ─── Search (Multi-tier ultra resilient) ───────────────────────────────
+    // ─── Search ────────────────────────────────────────────────────────────
 
     public List<MusicTrackDto> searchTracks(String query) {
         if (query == null || query.trim().isEmpty()) {
             return Collections.emptyList();
         }
 
-        // Tier 1: Direct YouTube HTML Scraper (Ultra-fast < 400ms, 100% reliable anywhere without dependencies)
+        // Tier 1: Direct YouTube HTML Scraper (Ultra-fast < 400ms, 100% reliable anywhere)
         List<MusicTrackDto> directResults = searchViaYoutubeScraper(query.trim());
         if (!directResults.isEmpty()) {
             log.info("YouTube direct HTML search success: {} results for '{}'", directResults.size(), query);
@@ -205,11 +204,6 @@ public class YoutubeAudioService {
         return Collections.emptyList();
     }
 
-    /**
-     * Direct YouTube HTML Results scraper.
-     * Parses ytInitialData JSON directly from YouTube search results page.
-     * Extremely fast (~300ms) and works anywhere without third-party APIs or external binaries.
-     */
     private List<MusicTrackDto> searchViaYoutubeScraper(String query) {
         try {
             String encodedQuery = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8);
@@ -333,7 +327,7 @@ public class YoutubeAudioService {
                 }
             }
 
-            boolean finished = process.waitFor(4, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(3, TimeUnit.SECONDS);
             if (!finished) process.destroyForcibly();
 
             if (!results.isEmpty()) {
@@ -389,13 +383,8 @@ public class YoutubeAudioService {
         return Collections.emptyList();
     }
 
-    // ─── Stream Extraction (Parallel Race with strict 3.5s deadline) ───────
+    // ─── Stream Extraction (Memory optimized for 512MB RAM limit) ─────────
 
-    /**
-     * Get Direct Audio Stream URL for a YouTube Video ID.
-     * All sources (yt-dlp fast, yt-dlp android, Piped, Invidious) run in PARALLEL simultaneously.
-     * Hard timeout cap: 3.5 seconds.
-     */
     public String getDirectAudioStreamUrl(String youtubeId) {
         if (youtubeId == null || youtubeId.trim().isEmpty()) {
             return null;
@@ -408,32 +397,25 @@ public class YoutubeAudioService {
             return cached.url();
         }
 
-        // 2. Launch ALL extraction tasks in PARALLEL simultaneously
+        // 2. Launch tasks in parallel with single yt-dlp instance to save RAM
         List<CompletableFuture<String>> futures = new ArrayList<>();
 
         if (isYtDlpAvailable()) {
-            // Task A: Standard fast yt-dlp
             futures.add(CompletableFuture.supplyAsync(
-                    () -> runYtDlpExtract(youtubeId, "-f", "ba/b", "--socket-timeout", "3"), executor));
-
-            // Task B: Android client yt-dlp (bypasses bot detection on datacenter IPs)
-            futures.add(CompletableFuture.supplyAsync(
-                    () -> runYtDlpExtract(youtubeId, "-f", "ba/b", "--extractor-args", "youtube:player_client=android,web", "--socket-timeout", "3"), executor));
+                    () -> runYtDlpExtract(youtubeId, "-f", "ba/b", "--extractor-args", "youtube:player_client=android,web", "--socket-timeout", "2"), executor));
         }
 
-        // Task C: Piped API instances in parallel
         for (String instance : PIPED_INSTANCES) {
             futures.add(CompletableFuture.supplyAsync(
                     () -> extractStreamFromPiped(instance, youtubeId), executor));
         }
 
-        // Task D: Invidious API instances in parallel
         for (String instance : INVIDIOUS_INSTANCES) {
             futures.add(CompletableFuture.supplyAsync(
                     () -> extractStreamFromInvidious(instance, youtubeId), executor));
         }
 
-        // 3. Race all tasks: return FIRST non-null result within 3.5s max
+        // 3. Race tasks: return FIRST non-null result within 3.5s max
         try {
             CompletableFuture<Object> anyResult = CompletableFuture.anyOf(
                     futures.stream()
@@ -451,7 +433,6 @@ public class YoutubeAudioService {
             log.debug("Stream resolution parallel race finished or timed out for {}: {}", youtubeId, e.getMessage());
         }
 
-        // 4. Return null immediately after 3.5s max — frontend switches smoothly to embed mode
         log.warn("No stream URL for {} within 3.5s. Frontend will use YouTube embed fallback.", youtubeId);
         return null;
     }
@@ -464,7 +445,7 @@ public class YoutubeAudioService {
             if (extraArgs != null && extraArgs.length > 0) {
                 cmd.addAll(Arrays.asList(extraArgs));
             } else {
-                cmd.addAll(List.of("-f", "ba/b", "--socket-timeout", "3"));
+                cmd.addAll(List.of("-f", "ba/b", "--socket-timeout", "2"));
             }
             cmd.addAll(List.of(
                     "--get-url",
@@ -484,7 +465,7 @@ public class YoutubeAudioService {
                 audioUrl = reader.readLine();
             }
 
-            boolean finished = process.waitFor(3, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(2, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 return null;

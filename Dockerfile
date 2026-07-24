@@ -17,5 +17,5 @@ RUN apk add --no-cache python3 nodejs ffmpeg curl && \
 
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-# Tối ưu cấu hình bộ nhớ JVM cho môi trường RAM nhỏ (512MB RAM miễn phí)
-ENTRYPOINT ["java", "-XX:+UseG1GC", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+# Giới hạn JVM Heap tối đa 256MB để dành bộ nhớ cho OS và yt-dlp trên gói 512MB RAM miễn phí của Render
+ENTRYPOINT ["java", "-XX:+UseG1GC", "-Xmx256m", "-Xms128m", "-XX:MaxMetaspaceSize=128m", "-jar", "app.jar"]
