@@ -1,8 +1,10 @@
 package com.studytracker.service;
 
+import com.studytracker.event.XpEarnedEvent;
 import com.studytracker.model.User;
 import com.studytracker.repository.XpLevelConfigRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class XpService {
 
     private final XpLevelConfigRepository xpLevelConfigRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${app.xp.base-rate-per-minute:10}")
     private int baseRatePerMinute;
@@ -86,6 +89,9 @@ public class XpService {
         user.setTotalXp(totalXp);
         user.setCurrentXp(currentXp);
         user.setCurrentLevel(currentLevel);
+
+        // Bắn event để xử lý đồng bộ Redis Leaderboard bất đồng bộ
+        eventPublisher.publishEvent(new XpEarnedEvent(this, user.getId(), xpEarned, totalXp));
 
         int xpRequiredForNextLevel = getXpRequiredForNextLevel(currentLevel);
 
