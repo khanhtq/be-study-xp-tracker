@@ -27,8 +27,7 @@ public class StudySessionController {
             @AuthenticationPrincipal User user,
             @RequestBody(required = false) SessionStartRequest request
     ) {
-        String subject = (request != null) ? request.getSubject() : null;
-        return ResponseEntity.ok(studySessionService.startSession(user, subject));
+        return ResponseEntity.ok(studySessionService.startSession(user, request));
     }
 
     @PostMapping("/{id}/stop")

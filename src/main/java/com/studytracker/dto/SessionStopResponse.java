@@ -16,6 +16,9 @@ public class SessionStopResponse {
     private String subject;
     private Integer durationSeconds;
     private Integer xpEarned;
+    private String studyMethod;
+    private Integer targetDurationSeconds;
+    private Boolean isCompleted;
     private Boolean leveledUp;
     private Integer levelBefore;
     private Integer levelAfter;

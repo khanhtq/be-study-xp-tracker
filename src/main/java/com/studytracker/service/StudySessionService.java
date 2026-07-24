@@ -1,6 +1,7 @@
 package com.studytracker.service;
 
 import com.studytracker.dto.SessionManualRequest;
+import com.studytracker.dto.SessionStartRequest;
 import com.studytracker.dto.SessionStopResponse;
 import com.studytracker.dto.StudySessionResponse;
 import com.studytracker.model.SessionSource;
@@ -32,8 +33,16 @@ public class StudySessionService {
     /**
      * Bắt đầu một session học tập mới (Timer mode).
      */
+    /**
+     * Bắt đầu một session học tập mới (Timer mode).
+     */
     @Transactional
-    public StudySessionResponse startSession(User user, String subject) {
+    public StudySessionResponse startSession(User user, SessionStartRequest request) {
+        String subject = request != null ? request.getSubject() : null;
+        String studyMethod = (request != null && request.getStudyMethod() != null && !request.getStudyMethod().isBlank())
+                ? request.getStudyMethod() : "FREE_MODE";
+        Integer targetDurationSeconds = request != null ? request.getTargetDurationSeconds() : null;
+
         // Kiểm tra xem user có session nào chưa kết thúc không
         Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(user);
         if (activeSessionOpt.isPresent()) {
@@ -45,6 +54,9 @@ public class StudySessionService {
         StudySession session = StudySession.builder()
                 .user(user)
                 .subject(subject != null ? subject.trim() : null)
+                .studyMethod(studyMethod)
+                .targetDurationSeconds(targetDurationSeconds)
+                .isCompleted(false)
                 .startedAt(now)
                 .lastHeartbeatAt(now)
                 .source(SessionSource.TIMER)
@@ -52,6 +64,16 @@ public class StudySessionService {
 
         StudySession saved = studySessionRepository.save(session);
         return mapToResponse(saved);
+    }
+
+    /**
+     * Overload để tương thích ngược nếu gọi chỉ với subject.
+     */
+    @Transactional
+    public StudySessionResponse startSession(User user, String subject) {
+        SessionStartRequest req = new SessionStartRequest();
+        req.setSubject(subject);
+        return startSession(user, req);
     }
 
     /**
@@ -103,22 +125,36 @@ public class StudySessionService {
             durationSeconds = 1; // Tối thiểu 1 giây
         }
 
-        int xpEarned = xpService.calculateXpEarned(durationSeconds);
+        int baseXp = xpService.calculateXpEarned(durationSeconds);
+        boolean isCompleted = false;
+        int finalXp = baseXp;
+
+        // Thưởng 15% Bonus XP nếu người dùng học đủ thời gian preset
+        if (session.getTargetDurationSeconds() != null && session.getTargetDurationSeconds() > 0) {
+            if (durationSeconds >= (session.getTargetDurationSeconds() - 5)) {
+                isCompleted = true;
+                finalXp = (int) Math.round(baseXp * 1.15);
+            }
+        }
         
         // Cộng XP và cập nhật level của user
-        XpService.XpCalculationResult xpResult = xpService.addXp(user, xpEarned);
+        XpService.XpCalculationResult xpResult = xpService.addXp(user, finalXp);
         userRepository.save(user);
 
         session.setEndedAt(endedAt);
         session.setDurationSeconds(durationSeconds);
-        session.setXpEarned(xpEarned);
+        session.setXpEarned(finalXp);
+        session.setIsCompleted(isCompleted);
         studySessionRepository.save(session);
 
         return SessionStopResponse.builder()
                 .sessionId(session.getId())
                 .subject(session.getSubject())
                 .durationSeconds(durationSeconds)
-                .xpEarned(xpEarned)
+                .xpEarned(finalXp)
+                .studyMethod(session.getStudyMethod())
+                .targetDurationSeconds(session.getTargetDurationSeconds())
+                .isCompleted(isCompleted)
                 .leveledUp(xpResult.leveledUp())
                 .levelBefore(xpResult.levelBefore())
                 .levelAfter(xpResult.levelAfter())
@@ -150,6 +186,7 @@ public class StudySessionService {
         StudySession session = StudySession.builder()
                 .user(user)
                 .subject(request.getSubject() != null ? request.getSubject().trim() : null)
+                .studyMethod("FREE_MODE")
                 .startedAt(startedAt)
                 .endedAt(endedAt)
                 .durationSeconds(durationSeconds)
@@ -188,6 +225,9 @@ public class StudySessionService {
                 .durationSeconds(session.getDurationSeconds())
                 .xpEarned(session.getXpEarned())
                 .source(session.getSource())
+                .studyMethod(session.getStudyMethod())
+                .targetDurationSeconds(session.getTargetDurationSeconds())
+                .isCompleted(session.getIsCompleted())
                 .lastHeartbeatAt(session.getLastHeartbeatAt())
                 .createdAt(session.getCreatedAt())
                 .build();

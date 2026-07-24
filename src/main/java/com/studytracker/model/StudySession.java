@@ -44,6 +44,12 @@ public class StudySession {
     @Column(nullable = false)
     private SessionSource source;
 
+    private String studyMethod;
+
+    private Integer targetDurationSeconds;
+
+    private Boolean isCompleted;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Instant createdAt;

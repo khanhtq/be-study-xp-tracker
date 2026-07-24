@@ -21,6 +21,9 @@ public class StudySessionResponse {
     private Integer durationSeconds;
     private Integer xpEarned;
     private SessionSource source;
+    private String studyMethod;
+    private Integer targetDurationSeconds;
+    private Boolean isCompleted;
     private Instant lastHeartbeatAt;
     private Instant createdAt;
 }
