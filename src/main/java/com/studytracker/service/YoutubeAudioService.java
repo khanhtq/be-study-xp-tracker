@@ -213,7 +213,7 @@ public class YoutubeAudioService {
         }
 
         try {
-            return awaitFirstSuccessful(futures, results -> results != null && !results.isEmpty(), 12, TimeUnit.SECONDS);
+            return awaitFirstSuccessful(futures, results -> results != null && !results.isEmpty(), 8, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.warn("All search provider attempts failed: {}", e.getMessage());
         }
@@ -398,7 +398,7 @@ public class YoutubeAudioService {
         }
 
         try {
-            String streamUrl = awaitFirstSuccessful(futures, url -> url != null && !url.isBlank(), 15, TimeUnit.SECONDS);
+            String streamUrl = awaitFirstSuccessful(futures, url -> url != null && !url.isBlank(), 8, TimeUnit.SECONDS);
             if (streamUrl != null) {
                 streamCache.put(youtubeId, new CachedStreamUrl(streamUrl, System.currentTimeMillis() + CACHE_TTL_MS));
                 log.info("Proxy stream resolved for {}", youtubeId);
