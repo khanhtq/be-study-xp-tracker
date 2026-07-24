@@ -19,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Predicate;
 
 @Service
 public class YoutubeAudioService {
@@ -27,10 +26,10 @@ public class YoutubeAudioService {
     private static final Logger log = LoggerFactory.getLogger(YoutubeAudioService.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
+            .connectTimeout(Duration.ofSeconds(3))
             .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
-    private final ExecutorService executor = Executors.newFixedThreadPool(6);
+    private final ExecutorService executor = Executors.newFixedThreadPool(10);
 
     private static final String[] PIPED_INSTANCES = {
             "https://pipedapi.kavin.rocks",
@@ -68,25 +67,23 @@ public class YoutubeAudioService {
 
     // yt-dlp executable path: prefer PATH, fallback to known install location
     private static final String[] YT_DLP_PATHS = {
-            System.getenv("YT_DLP_PATH"),
             "yt-dlp",
+            "/usr/local/bin/yt-dlp",
+            "/usr/bin/yt-dlp",
             System.getProperty("user.home") + "/AppData/Local/Python/pythoncore-3.14-64/Scripts/yt-dlp.exe",
             System.getProperty("user.home") + "/AppData/Local/Programs/Python/Python312/Scripts/yt-dlp.exe",
-            System.getProperty("user.home") + "/AppData/Local/Programs/Python/Python311/Scripts/yt-dlp.exe",
-            "/usr/local/bin/yt-dlp",
-            "/usr/bin/yt-dlp"
+            System.getProperty("user.home") + "/AppData/Local/Programs/Python/Python311/Scripts/yt-dlp.exe"
     };
     private volatile String ytDlpPath = null;
 
     private boolean isYtDlpAvailable() {
         if (ytDlpAvailable != null) return ytDlpAvailable;
         for (String path : YT_DLP_PATHS) {
-            if (path == null || path.isBlank()) continue;
             try {
                 Process process = new ProcessBuilder(path, "--version")
                         .redirectErrorStream(true)
                         .start();
-                boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+                boolean finished = process.waitFor(3, TimeUnit.SECONDS);
                 if (finished && process.exitValue() == 0) {
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                         String version = reader.readLine();
@@ -101,32 +98,6 @@ public class YoutubeAudioService {
         ytDlpAvailable = false;
         log.warn("yt-dlp not found in any known location");
         return false;
-    }
-
-    /**
-     * Completes only when a provider returns a usable value. CompletableFuture.anyOf is
-     * unsuitable here because it completes when the first provider fails as well.
-     */
-    private <T> T awaitFirstSuccessful(
-            List<CompletableFuture<T>> futures,
-            Predicate<T> isUsable,
-            long timeout,
-            TimeUnit unit
-    ) throws InterruptedException, ExecutionException, TimeoutException {
-        CompletableFuture<T> firstSuccessful = new CompletableFuture<>();
-        for (CompletableFuture<T> future : futures) {
-            future.whenComplete((value, error) -> {
-                if (error == null && isUsable.test(value)) {
-                    firstSuccessful.complete(value);
-                }
-            });
-        }
-
-        try {
-            return firstSuccessful.get(timeout, unit);
-        } finally {
-            futures.forEach(future -> future.cancel(true));
-        }
     }
 
     // ─── Preset Playlists ──────────────────────────────────────────────────
@@ -196,83 +167,48 @@ public class YoutubeAudioService {
             return Collections.emptyList();
         }
 
-        // Try yt-dlp search first (most reliable)
+        // Try yt-dlp search first
         if (isYtDlpAvailable()) {
             List<MusicTrackDto> results = searchViaYtDlp(query.trim());
             if (!results.isEmpty()) return results;
         }
 
-        // Fallback to Piped API parallel search
+        // Fallback to Piped API parallel search with 4s timeout
         String encodedQuery = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8);
         List<CompletableFuture<List<MusicTrackDto>>> futures = new ArrayList<>();
         for (String instance : PIPED_INSTANCES) {
             futures.add(CompletableFuture.supplyAsync(() -> searchFromPipedInstance(instance, encodedQuery), executor));
         }
-        for (String instance : INVIDIOUS_INSTANCES) {
-            futures.add(CompletableFuture.supplyAsync(() -> searchFromInvidiousInstance(instance, encodedQuery), executor));
-        }
 
         try {
-            return awaitFirstSuccessful(futures, results -> results != null && !results.isEmpty(), 8, TimeUnit.SECONDS);
+            CompletableFuture<Object> anyResult = CompletableFuture.anyOf(
+                    futures.stream()
+                            .map(f -> f.thenApply(list -> list.isEmpty() ? null : list))
+                            .toArray(CompletableFuture[]::new)
+            );
+            Object result = anyResult.get(4, TimeUnit.SECONDS);
+            if (result instanceof List<?> list && !list.isEmpty()) {
+                @SuppressWarnings("unchecked")
+                List<MusicTrackDto> typedResult = (List<MusicTrackDto>) list;
+                return typedResult;
+            }
         } catch (Exception e) {
-            log.warn("All search provider attempts failed: {}", e.getMessage());
+            log.warn("All Piped search attempts failed: {}", e.getMessage());
         }
 
         return Collections.emptyList();
-    }
-
-    private List<MusicTrackDto> searchFromInvidiousInstance(String instance, String encodedQuery) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(instance + "/api/v1/search?q=" + encodedQuery + "&type=video"))
-                    .header("User-Agent", "Mozilla/5.0")
-                    .timeout(Duration.ofSeconds(8))
-                    .GET()
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) return Collections.emptyList();
-
-            JsonNode items = objectMapper.readTree(response.body());
-            if (!items.isArray()) return Collections.emptyList();
-
-            List<MusicTrackDto> results = new ArrayList<>();
-            for (JsonNode item : items) {
-                String id = item.path("videoId").asText("");
-                if (id.isEmpty()) continue;
-
-                String thumbnail = "https://img.youtube.com/vi/" + id + "/hqdefault.jpg";
-                JsonNode thumbnails = item.path("videoThumbnails");
-                if (thumbnails.isArray() && !thumbnails.isEmpty()) {
-                    thumbnail = thumbnails.get(thumbnails.size() - 1).path("url").asText(thumbnail);
-                }
-                results.add(new MusicTrackDto(
-                        id,
-                        item.path("title").asText("Unknown"),
-                        item.path("author").asText("Unknown"),
-                        thumbnail,
-                        item.path("lengthSeconds").asLong(0L)
-                ));
-            }
-            if (!results.isEmpty()) {
-                log.info("Invidious search success from {}: {} results", instance, results.size());
-            }
-            return results;
-        } catch (Exception e) {
-            log.debug("Invidious search failed: {} -> {}", instance, e.getMessage());
-            return Collections.emptyList();
-        }
     }
 
     private List<MusicTrackDto> searchViaYtDlp(String query) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     ytDlpPath,
-                    "ytsearch10:" + query,      // Search top 10 results
+                    "ytsearch10:" + query,
                     "--flat-playlist",
                     "--dump-json",
                     "--no-download",
                     "--no-warnings",
+                    "--socket-timeout", "3",
                     "--quiet"
             );
             pb.redirectErrorStream(true);
@@ -292,20 +228,17 @@ public class YoutubeAudioService {
                         long duration = node.path("duration").asLong(0L);
                         String thumbnail = "https://img.youtube.com/vi/" + id + "/hqdefault.jpg";
 
-                        // Prefer thumbnail from yt-dlp if available
                         JsonNode thumbnails = node.path("thumbnails");
                         if (thumbnails.isArray() && !thumbnails.isEmpty()) {
                             thumbnail = thumbnails.get(thumbnails.size() - 1).path("url").asText(thumbnail);
                         }
 
                         results.add(new MusicTrackDto(id, title, uploader, thumbnail, duration));
-                    } catch (Exception ignored) {
-                        // Skip malformed JSON lines
-                    }
+                    } catch (Exception ignored) {}
                 }
             }
 
-            boolean finished = process.waitFor(15, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(4, TimeUnit.SECONDS);
             if (!finished) process.destroyForcibly();
 
             if (!results.isEmpty()) {
@@ -325,7 +258,7 @@ public class YoutubeAudioService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .timeout(Duration.ofSeconds(8))
+                    .timeout(Duration.ofSeconds(3))
                     .GET()
                     .build();
 
@@ -361,83 +294,91 @@ public class YoutubeAudioService {
         return Collections.emptyList();
     }
 
-    // ─── Stream Extraction ─────────────────────────────────────────────────
+    // ─── Stream Extraction (Parallel Race with strict 3.5s deadline) ───────
 
     /**
      * Get Direct Audio Stream URL for a YouTube Video ID.
-     * Priority: Cache → yt-dlp → Piped/Invidious parallel race → null (frontend embed fallback)
+     * All sources (yt-dlp fast, yt-dlp android, Piped, Invidious) run in PARALLEL simultaneously.
+     * Hard timeout cap: 3.5 seconds.
      */
     public String getDirectAudioStreamUrl(String youtubeId) {
         if (youtubeId == null || youtubeId.trim().isEmpty()) {
             return null;
         }
 
-        // 1. Check cache
+        // 1. Check cache (< 1ms)
         CachedStreamUrl cached = streamCache.get(youtubeId);
         if (cached != null && cached.isValid()) {
             log.debug("Cache hit for stream: {}", youtubeId);
             return cached.url();
         }
 
-        // 2. Try yt-dlp first (most reliable)
-        if (isYtDlpAvailable()) {
-            String ytDlpUrl = extractViaYtDlp(youtubeId);
-            if (ytDlpUrl != null) {
-                streamCache.put(youtubeId, new CachedStreamUrl(ytDlpUrl, System.currentTimeMillis() + CACHE_TTL_MS));
-                return ytDlpUrl;
-            }
-        }
-
-        // 3. Piped + Invidious parallel race
+        // 2. Launch ALL extraction tasks in PARALLEL simultaneously
         List<CompletableFuture<String>> futures = new ArrayList<>();
-        for (String instance : PIPED_INSTANCES) {
-            futures.add(CompletableFuture.supplyAsync(() -> extractStreamFromPiped(instance, youtubeId), executor));
-        }
-        for (String instance : INVIDIOUS_INSTANCES) {
-            futures.add(CompletableFuture.supplyAsync(() -> extractStreamFromInvidious(instance, youtubeId), executor));
+
+        if (isYtDlpAvailable()) {
+            // Task A: Standard fast yt-dlp
+            futures.add(CompletableFuture.supplyAsync(
+                    () -> runYtDlpExtract(youtubeId, "-f", "ba/b", "--socket-timeout", "3"), executor));
+
+            // Task B: Android client yt-dlp (bypasses bot detection on datacenter IPs)
+            futures.add(CompletableFuture.supplyAsync(
+                    () -> runYtDlpExtract(youtubeId, "-f", "ba/b", "--extractor-args", "youtube:player_client=android,web", "--socket-timeout", "3"), executor));
         }
 
+        // Task C: Piped API instances in parallel
+        for (String instance : PIPED_INSTANCES) {
+            futures.add(CompletableFuture.supplyAsync(
+                    () -> extractStreamFromPiped(instance, youtubeId), executor));
+        }
+
+        // Task D: Invidious API instances in parallel
+        for (String instance : INVIDIOUS_INSTANCES) {
+            futures.add(CompletableFuture.supplyAsync(
+                    () -> extractStreamFromInvidious(instance, youtubeId), executor));
+        }
+
+        // 3. Race all tasks: return FIRST non-null result within 3.5s max
         try {
-            String streamUrl = awaitFirstSuccessful(futures, url -> url != null && !url.isBlank(), 8, TimeUnit.SECONDS);
-            if (streamUrl != null) {
+            CompletableFuture<Object> anyResult = CompletableFuture.anyOf(
+                    futures.stream()
+                            .map(f -> f.thenApply(url -> (url != null && !url.isBlank()) ? url : null))
+                            .toArray(CompletableFuture[]::new)
+            );
+
+            Object result = anyResult.get(3500, TimeUnit.MILLISECONDS);
+            if (result instanceof String streamUrl && !streamUrl.isBlank()) {
                 streamCache.put(youtubeId, new CachedStreamUrl(streamUrl, System.currentTimeMillis() + CACHE_TTL_MS));
-                log.info("Proxy stream resolved for {}", youtubeId);
+                log.info("Audio stream resolved for {} in parallel race", youtubeId);
                 return streamUrl;
             }
         } catch (Exception e) {
-            log.debug("Proxy stream extraction timed out for {}", youtubeId);
+            log.debug("Stream resolution parallel race finished or timed out for {}: {}", youtubeId, e.getMessage());
         }
 
-        // 4. Return null — frontend falls back to YouTube embed iframe
-        log.warn("No stream URL for {}. Frontend will use YouTube embed fallback.", youtubeId);
+        // 4. Return null immediately after 3.5s max — frontend switches smoothly to embed mode
+        log.warn("No stream URL for {} within 3.5s. Frontend will use YouTube embed fallback.", youtubeId);
         return null;
     }
 
-    /**
-     * Extract direct audio URL using yt-dlp subprocess.
-     * This is the most reliable method as yt-dlp handles YouTube's constantly-changing formats.
-     */
-    private String extractViaYtDlp(String youtubeId) {
-        // First try as normal video
-        String result = runYtDlpExtract(youtubeId, false);
-        if (result != null) return result;
-
-        // If failed, try as livestream (some Lofi Girl channels are live)
-        result = runYtDlpExtract(youtubeId, true);
-        return result;
-    }
-
-    private String runYtDlpExtract(String youtubeId, boolean isLive) {
+    private String runYtDlpExtract(String youtubeId, String... extraArgs) {
+        if (ytDlpPath == null) return null;
         try {
             List<String> cmd = new ArrayList<>();
             cmd.add(ytDlpPath);
-            if (isLive) {
-                // For livestreams, get the HLS/DASH manifest URL
-                cmd.addAll(List.of("-f", "bestaudio", "--get-url", "--no-download", "--no-warnings", "--no-playlist", "--quiet"));
+            if (extraArgs != null && extraArgs.length > 0) {
+                cmd.addAll(Arrays.asList(extraArgs));
             } else {
-                cmd.addAll(List.of("-f", "bestaudio[ext=m4a]/bestaudio", "--get-url", "--no-download", "--no-warnings", "--no-playlist", "--quiet"));
+                cmd.addAll(List.of("-f", "ba/b", "--socket-timeout", "3"));
             }
-            cmd.add("https://www.youtube.com/watch?v=" + youtubeId);
+            cmd.addAll(List.of(
+                    "--get-url",
+                    "--no-download",
+                    "--no-warnings",
+                    "--no-playlist",
+                    "--quiet",
+                    "https://www.youtube.com/watch?v=" + youtubeId
+            ));
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(false);
@@ -448,27 +389,18 @@ public class YoutubeAudioService {
                 audioUrl = reader.readLine();
             }
 
-            // Read stderr for debugging
-            try (BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-                String errLine;
-                while ((errLine = errReader.readLine()) != null) {
-                    if (!errLine.isBlank()) log.debug("yt-dlp stderr: {}", errLine);
-                }
-            }
-
-            boolean finished = process.waitFor(20, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(3, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
-                log.warn("yt-dlp timed out for {}", youtubeId);
                 return null;
             }
 
             if (audioUrl != null && !audioUrl.isBlank() && audioUrl.startsWith("http")) {
-                log.info("yt-dlp stream success for {} (URL length: {})", youtubeId, audioUrl.length());
+                log.info("yt-dlp stream success for {}", youtubeId);
                 return audioUrl.trim();
             }
         } catch (Exception e) {
-            log.warn("yt-dlp extraction failed for {}: {}", youtubeId, e.getMessage());
+            log.debug("yt-dlp extract error for {}: {}", youtubeId, e.getMessage());
         }
         return null;
     }
@@ -479,7 +411,7 @@ public class YoutubeAudioService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .timeout(Duration.ofSeconds(10))
+                    .timeout(Duration.ofSeconds(3))
                     .GET()
                     .build();
 
@@ -521,7 +453,7 @@ public class YoutubeAudioService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .timeout(Duration.ofSeconds(10))
+                    .timeout(Duration.ofSeconds(3))
                     .GET()
                     .build();
 

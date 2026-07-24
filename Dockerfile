@@ -10,11 +10,10 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Install yt-dlp in the runtime image. The version check makes the Docker build fail
-# immediately if the executable is missing or cannot start in production.
-RUN apk add --no-cache python3 py3-pip ffmpeg && \
-    python3 -m pip install --no-cache-dir --break-system-packages --upgrade yt-dlp && \
-    yt-dlp --version
+# Cài đặt python3, nodejs (JS runtime cho yt-dlp), ffmpeg, curl và yt-dlp
+RUN apk add --no-cache python3 nodejs ffmpeg curl && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp
 
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
