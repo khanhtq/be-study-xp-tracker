@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Predicate;
 
 @Service
 public class YoutubeAudioService {
@@ -67,6 +68,7 @@ public class YoutubeAudioService {
 
     // yt-dlp executable path: prefer PATH, fallback to known install location
     private static final String[] YT_DLP_PATHS = {
+            System.getenv("YT_DLP_PATH"),
             "yt-dlp",
             System.getProperty("user.home") + "/AppData/Local/Python/pythoncore-3.14-64/Scripts/yt-dlp.exe",
             System.getProperty("user.home") + "/AppData/Local/Programs/Python/Python312/Scripts/yt-dlp.exe",
@@ -79,6 +81,7 @@ public class YoutubeAudioService {
     private boolean isYtDlpAvailable() {
         if (ytDlpAvailable != null) return ytDlpAvailable;
         for (String path : YT_DLP_PATHS) {
+            if (path == null || path.isBlank()) continue;
             try {
                 Process process = new ProcessBuilder(path, "--version")
                         .redirectErrorStream(true)
@@ -98,6 +101,32 @@ public class YoutubeAudioService {
         ytDlpAvailable = false;
         log.warn("yt-dlp not found in any known location");
         return false;
+    }
+
+    /**
+     * Completes only when a provider returns a usable value. CompletableFuture.anyOf is
+     * unsuitable here because it completes when the first provider fails as well.
+     */
+    private <T> T awaitFirstSuccessful(
+            List<CompletableFuture<T>> futures,
+            Predicate<T> isUsable,
+            long timeout,
+            TimeUnit unit
+    ) throws InterruptedException, ExecutionException, TimeoutException {
+        CompletableFuture<T> firstSuccessful = new CompletableFuture<>();
+        for (CompletableFuture<T> future : futures) {
+            future.whenComplete((value, error) -> {
+                if (error == null && isUsable.test(value)) {
+                    firstSuccessful.complete(value);
+                }
+            });
+        }
+
+        try {
+            return firstSuccessful.get(timeout, unit);
+        } finally {
+            futures.forEach(future -> future.cancel(true));
+        }
     }
 
     // ─── Preset Playlists ──────────────────────────────────────────────────
@@ -179,24 +208,60 @@ public class YoutubeAudioService {
         for (String instance : PIPED_INSTANCES) {
             futures.add(CompletableFuture.supplyAsync(() -> searchFromPipedInstance(instance, encodedQuery), executor));
         }
+        for (String instance : INVIDIOUS_INSTANCES) {
+            futures.add(CompletableFuture.supplyAsync(() -> searchFromInvidiousInstance(instance, encodedQuery), executor));
+        }
 
         try {
-            CompletableFuture<Object> anyResult = CompletableFuture.anyOf(
-                    futures.stream()
-                            .map(f -> f.thenApply(list -> list.isEmpty() ? null : list))
-                            .toArray(CompletableFuture[]::new)
-            );
-            Object result = anyResult.get(12, TimeUnit.SECONDS);
-            if (result instanceof List<?> list && !list.isEmpty()) {
-                @SuppressWarnings("unchecked")
-                List<MusicTrackDto> typedResult = (List<MusicTrackDto>) list;
-                return typedResult;
-            }
+            return awaitFirstSuccessful(futures, results -> results != null && !results.isEmpty(), 12, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.warn("All Piped search attempts failed: {}", e.getMessage());
+            log.warn("All search provider attempts failed: {}", e.getMessage());
         }
 
         return Collections.emptyList();
+    }
+
+    private List<MusicTrackDto> searchFromInvidiousInstance(String instance, String encodedQuery) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(instance + "/api/v1/search?q=" + encodedQuery + "&type=video"))
+                    .header("User-Agent", "Mozilla/5.0")
+                    .timeout(Duration.ofSeconds(8))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) return Collections.emptyList();
+
+            JsonNode items = objectMapper.readTree(response.body());
+            if (!items.isArray()) return Collections.emptyList();
+
+            List<MusicTrackDto> results = new ArrayList<>();
+            for (JsonNode item : items) {
+                String id = item.path("videoId").asText("");
+                if (id.isEmpty()) continue;
+
+                String thumbnail = "https://img.youtube.com/vi/" + id + "/hqdefault.jpg";
+                JsonNode thumbnails = item.path("videoThumbnails");
+                if (thumbnails.isArray() && !thumbnails.isEmpty()) {
+                    thumbnail = thumbnails.get(thumbnails.size() - 1).path("url").asText(thumbnail);
+                }
+                results.add(new MusicTrackDto(
+                        id,
+                        item.path("title").asText("Unknown"),
+                        item.path("author").asText("Unknown"),
+                        thumbnail,
+                        item.path("lengthSeconds").asLong(0L)
+                ));
+            }
+            if (!results.isEmpty()) {
+                log.info("Invidious search success from {}: {} results", instance, results.size());
+            }
+            return results;
+        } catch (Exception e) {
+            log.debug("Invidious search failed: {} -> {}", instance, e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     private List<MusicTrackDto> searchViaYtDlp(String query) {
@@ -333,13 +398,8 @@ public class YoutubeAudioService {
         }
 
         try {
-            CompletableFuture<Object> anyResult = CompletableFuture.anyOf(
-                    futures.stream()
-                            .map(f -> f.thenApply(url -> (url == null || url.isEmpty()) ? null : url))
-                            .toArray(CompletableFuture[]::new)
-            );
-            Object result = anyResult.get(15, TimeUnit.SECONDS);
-            if (result instanceof String streamUrl && !streamUrl.isEmpty()) {
+            String streamUrl = awaitFirstSuccessful(futures, url -> url != null && !url.isBlank(), 15, TimeUnit.SECONDS);
+            if (streamUrl != null) {
                 streamCache.put(youtubeId, new CachedStreamUrl(streamUrl, System.currentTimeMillis() + CACHE_TTL_MS));
                 log.info("Proxy stream resolved for {}", youtubeId);
                 return streamUrl;
