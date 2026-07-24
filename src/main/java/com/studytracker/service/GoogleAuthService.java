@@ -65,7 +65,7 @@ public class GoogleAuthService {
             if ((user.getDisplayName() == null || user.getDisplayName().isBlank()) && name != null) {
                 user.setDisplayName(name);
             }
-            if (pictureUrl != null) {
+            if ((user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) && pictureUrl != null) {
                 user.setAvatarUrl(pictureUrl);
             }
             user = userRepository.save(user);
