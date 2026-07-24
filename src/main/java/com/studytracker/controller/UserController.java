@@ -64,7 +64,9 @@ public class UserController {
     }
 
     @GetMapping("/{userId}/public-profile")
-    public ResponseEntity<PublicUserProfileDto> getPublicProfile(@PathVariable("userId") UUID userId) {
-        return ResponseEntity.ok(userService.getPublicProfile(userId));
+    public ResponseEntity<PublicUserProfileDto> getPublicProfile(
+            @PathVariable("userId") UUID userId,
+            @AuthenticationPrincipal User currentUser) {
+        return ResponseEntity.ok(userService.getPublicProfile(userId, currentUser));
     }
 }

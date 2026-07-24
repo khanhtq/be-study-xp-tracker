@@ -50,6 +50,8 @@ public class UserService {
     private final XpService xpService;
     private final EmailService emailService;
     private final FileStorageProvider fileStorageProvider;
+    private final com.studytracker.repository.FriendshipRepository friendshipRepository;
+    private final FriendshipService friendshipService;
 
     private String generate4DigitOtp() {
         SecureRandom random = new SecureRandom();
@@ -354,6 +356,8 @@ public class UserService {
     public UserProgressResponse getUserProgress(User user) {
         User u = userRepository.findById(user.getId()).orElse(user);
         int xpRequired = xpService.getXpRequiredForNextLevel(u.getCurrentLevel());
+        long pendingCount = friendshipService.getPendingRequestsCount(u);
+
         return UserProgressResponse.builder()
                 .userId(u.getId())
                 .email(u.getEmail())
@@ -366,12 +370,14 @@ public class UserService {
                 .themeAccent(u.getThemeAccent() != null ? u.getThemeAccent() : "indigo")
                 .soundEnabled(u.getSoundEnabled() != null ? u.getSoundEnabled() : true)
                 .preferredLanguage(u.getPreferredLanguage() != null ? u.getPreferredLanguage() : "en")
+                .activityStatusVisibility(u.getActivityStatusVisibility() != null ? u.getActivityStatusVisibility().name() : "EVERYONE")
                 .authProvider(u.getAuthProvider() != null ? u.getAuthProvider().name() : "LOCAL")
                 .role(u.getRole() != null ? u.getRole().name() : "ROLE_USER")
                 .currentLevel(u.getCurrentLevel())
                 .currentXp(u.getCurrentXp())
                 .xpRequiredForNextLevel(xpRequired)
                 .totalXp(u.getTotalXp())
+                .pendingFriendRequestsCount(pendingCount)
                 .build();
     }
 
@@ -412,6 +418,12 @@ public class UserService {
             String lang = request.getPreferredLanguage().trim();
             if ("vi".equalsIgnoreCase(lang) || "en".equalsIgnoreCase(lang) || "zh".equalsIgnoreCase(lang)) {
                 u.setPreferredLanguage(lang.toLowerCase());
+            }
+        }
+        if (request.getActivityStatusVisibility() != null) {
+            try {
+                u.setActivityStatusVisibility(com.studytracker.model.ActivityStatusVisibility.valueOf(request.getActivityStatusVisibility().trim().toUpperCase()));
+            } catch (Exception ignored) {
             }
         }
 
@@ -485,10 +497,11 @@ public class UserService {
         currentUser.setLastActiveAt(Instant.now());
         userRepository.save(currentUser);
 
-        // Fetch users active in the last 2 minutes (excluding Admins)
+        // Fetch users active in the last 2 minutes (excluding Admins and users who hid activity status from currentUser)
         Instant threshold = Instant.now().minus(Duration.ofMinutes(2));
         List<User> activeUsers = userRepository.findByLastActiveAtAfter(threshold).stream()
                 .filter(u -> u.getRole() != com.studytracker.model.Role.ROLE_ADMIN)
+                .filter(u -> friendshipService.shouldShowActivityStatus(u, currentUser))
                 .collect(Collectors.toList());
 
         return activeUsers.stream().map(u -> {
@@ -549,9 +562,10 @@ public class UserService {
                 .filter(u -> u.getEnabled() == null || Boolean.TRUE.equals(u.getEnabled()))
                 .filter(u -> u.getRole() != com.studytracker.model.Role.ROLE_ADMIN)
                 .map(u -> {
-                    boolean isOnline = u.getLastActiveAt() != null && u.getLastActiveAt().isAfter(onlineThreshold);
+                    boolean canSeeStatus = friendshipService.shouldShowActivityStatus(u, currentUser);
+                    boolean isOnline = canSeeStatus && u.getLastActiveAt() != null && u.getLastActiveAt().isAfter(onlineThreshold);
                     Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(u);
-                    boolean isStudying = activeSessionOpt.isPresent();
+                    boolean isStudying = canSeeStatus && activeSessionOpt.isPresent();
 
                     int baseLevel = u.getCurrentLevel() != null ? u.getCurrentLevel() : 1;
                     int currentXp = u.getCurrentXp() != null ? u.getCurrentXp() : 0;
@@ -575,6 +589,8 @@ public class UserService {
                         realtimeLevel = tempLevel;
                     }
 
+                    com.studytracker.dto.FriendshipStatusDto relation = (currentUser != null) ? friendshipService.getRelationStatus(currentUser, u.getId()) : null;
+
                     return UserSearchResponseDto.builder()
                             .userId(u.getId())
                             .displayName(u.getDisplayName())
@@ -584,21 +600,29 @@ public class UserService {
                             .totalXp(u.getTotalXp() != null ? u.getTotalXp() : 0L)
                             .isOnline(isOnline)
                             .isStudying(isStudying)
-                            .lastActiveAt(u.getLastActiveAt())
+                            .lastActiveAt(canSeeStatus ? u.getLastActiveAt() : null)
+                            .friendshipStatus(relation != null ? relation.getStatus() : "NONE")
+                            .friendshipId(relation != null ? relation.getFriendshipId() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
     }
 
     public PublicUserProfileDto getPublicProfile(UUID userId) {
+        return getPublicProfile(userId, null);
+    }
+
+    public PublicUserProfileDto getPublicProfile(UUID userId, User currentUser) {
         User u = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thành viên"));
 
+        boolean canSeeStatus = friendshipService.shouldShowActivityStatus(u, currentUser);
+
         Instant onlineThreshold = Instant.now().minus(Duration.ofMinutes(2));
-        boolean isOnline = u.getLastActiveAt() != null && u.getLastActiveAt().isAfter(onlineThreshold);
+        boolean isOnline = canSeeStatus && u.getLastActiveAt() != null && u.getLastActiveAt().isAfter(onlineThreshold);
 
         Optional<StudySession> activeSessionOpt = studySessionRepository.findByUserAndEndedAtIsNull(u);
-        boolean isStudying = activeSessionOpt.isPresent();
+        boolean isStudying = canSeeStatus && activeSessionOpt.isPresent();
         String currentSubject = isStudying ? activeSessionOpt.get().getSubject() : null;
         Instant studyStartedAt = isStudying ? activeSessionOpt.get().getStartedAt() : null;
 
@@ -607,8 +631,8 @@ public class UserService {
         int realtimeLevel = baseLevel;
         int realtimeXp = currentXp;
 
-        if (isStudying && studyStartedAt != null) {
-            long elapsedSeconds = Math.max(0, Duration.between(studyStartedAt, Instant.now()).getSeconds());
+        if (activeSessionOpt.isPresent() && activeSessionOpt.get().getStartedAt() != null) {
+            long elapsedSeconds = Math.max(0, Duration.between(activeSessionOpt.get().getStartedAt(), Instant.now()).getSeconds());
             int xpEarned = xpService.calculateXpEarned((int) elapsedSeconds);
             int tempXp = currentXp + xpEarned;
             int tempLevel = baseLevel;
@@ -649,6 +673,8 @@ public class UserService {
 
         int xpRequired = xpService.getXpRequiredForNextLevel(realtimeLevel);
 
+        com.studytracker.dto.FriendshipStatusDto relation = (currentUser != null) ? friendshipService.getRelationStatus(currentUser, userId) : null;
+
         return PublicUserProfileDto.builder()
                 .userId(u.getId())
                 .displayName(u.getDisplayName())
@@ -661,12 +687,14 @@ public class UserService {
                 .totalXp(u.getTotalXp() != null ? u.getTotalXp() : 0L)
                 .streakDays(streakDays)
                 .isOnline(isOnline)
-                .lastActiveAt(u.getLastActiveAt())
+                .lastActiveAt(canSeeStatus ? u.getLastActiveAt() : null)
                 .isStudying(isStudying)
                 .currentSubject(currentSubject)
                 .studyStartedAt(studyStartedAt)
                 .totalStudyTimeMinutes(totalStudyTimeMinutes)
                 .totalSessionsCount(totalSessionsCount)
+                .friendshipStatus(relation != null ? relation.getStatus() : "NONE")
+                .friendshipId(relation != null ? relation.getFriendshipId() : null)
                 .build();
     }
 }

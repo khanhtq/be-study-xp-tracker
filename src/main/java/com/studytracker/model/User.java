@@ -55,6 +55,11 @@ public class User implements UserDetails {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(name = "activity_status_visibility")
+    private ActivityStatusVisibility activityStatusVisibility = ActivityStatusVisibility.EVERYONE;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(name = "auth_provider")
     private AuthProvider authProvider = AuthProvider.LOCAL;
 

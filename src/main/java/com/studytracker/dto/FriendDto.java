@@ -12,24 +12,22 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PublicUserProfileDto {
+public class FriendDto {
+    private UUID friendshipId;
     private UUID userId;
     private String displayName;
+    private String email;
     private String avatarUrl;
     private String selectedTitle;
-    private String studyGoal;
     private Integer currentLevel;
-    private Integer currentXp;
-    private Integer xpRequiredForNextLevel;
     private Long totalXp;
-    private Integer streakDays;
+    private String friendshipStatus; // ACCEPTED, PENDING
+    private Instant requestCreatedAt;
+    
+    // Privacy-controlled activity fields
     private Boolean isOnline;
     private Instant lastActiveAt;
     private Boolean isStudying;
     private String currentSubject;
     private Instant studyStartedAt;
-    private Long totalStudyTimeMinutes;
-    private Long totalSessionsCount;
-    private String friendshipStatus; // NONE, PENDING_SENT, PENDING_RECEIVED, FRIENDS, BLOCKED
-    private UUID friendshipId;
 }

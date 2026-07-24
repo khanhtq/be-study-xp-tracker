@@ -23,10 +23,12 @@ public class UserProgressResponse {
     private String themeAccent;
     private Boolean soundEnabled;
     private String preferredLanguage;
+    private String activityStatusVisibility;
     private String authProvider;
     private String role;
     private Integer currentLevel;
     private Integer currentXp;
     private Integer xpRequiredForNextLevel;
     private Long totalXp;
+    private Long pendingFriendRequestsCount;
 }

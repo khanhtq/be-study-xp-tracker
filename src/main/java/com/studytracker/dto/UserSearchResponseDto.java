@@ -22,4 +22,6 @@ public class UserSearchResponseDto {
     private Boolean isOnline;
     private Boolean isStudying;
     private Instant lastActiveAt;
+    private String friendshipStatus; // NONE, PENDING_SENT, PENDING_RECEIVED, FRIENDS, BLOCKED, SELF
+    private UUID friendshipId;
 }
